@@ -6,8 +6,8 @@
 <title>Sổ Lớp — Quản lý lớp dạy kèm</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-const SUPABASE_URL = 'https://YOUR-PROJECT-REF.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 :root{
   --paper:#F2F7FC;
@@ -590,6 +590,24 @@ function seedData(){
   return {classes, students, assistants, sessions, studyLogs, grades, invoices, payments, requests, feedback, settings};
 }
 
+/* Thông tin ngân hàng chuẩn hiện tại của giáo viên. Nếu dữ liệu đã lưu (localStorage/Supabase)
+   từ trước còn mang thông tin ngân hàng cũ/mặc định (MB Bank...), hàm này sẽ tự đồng bộ lại
+   về đúng thông tin bên dưới, để mã QR và nhãn ngân hàng luôn khớp nhau dù dữ liệu cũ đến đâu. */
+const CURRENT_BANK_INFO = { bankName:'Vietcombank', bankAccount:'0385569139', bankAccountName:'CAO THI PHUONG THU' };
+const STALE_BANK_NAMES = ['mb bank','mb','mbbank'];
+const STALE_BANK_ACCOUNTS = ['0978654345'];
+function syncBankInfo(){
+  if(!state || !state.settings) return false;
+  const s = state.settings;
+  const bn = (s.bankName||'').trim().toLowerCase();
+  const isStale = STALE_BANK_NAMES.includes(bn) || STALE_BANK_ACCOUNTS.includes((s.bankAccount||'').trim()) || !s.bankName || !s.bankAccount;
+  if(isStale && bn !== CURRENT_BANK_INFO.bankName.toLowerCase()){
+    Object.assign(s, CURRENT_BANK_INFO);
+    return true;
+  }
+  return false;
+}
+
 async function loadState(){
   // 1) Ưu tiên Supabase nếu đã cấu hình
   if(SUPABASE_ENABLED){
@@ -598,6 +616,7 @@ async function loadState(){
       if(error) throw error;
       if(data && data.data){
         state = data.data;
+        if(syncBankInfo()){ await persist(); }
         // vẫn giữ một bản sao ở localStorage để mở nhanh lần sau / phòng mất mạng
         try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
         return;
@@ -610,7 +629,11 @@ async function loadState(){
   // 2) Nếu chưa cấu hình Supabase hoặc lỗi mạng -> dùng localStorage
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){ state = JSON.parse(raw); return; }
+    if(raw){
+      state = JSON.parse(raw);
+      if(syncBankInfo()){ await persist(); }
+      return;
+    }
   }catch(e){ /* ignore */ }
   // 3) Lần đầu chạy -> dữ liệu mẫu
   state = seedData();
