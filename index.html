@@ -6,8 +6,8 @@
 <title>Sổ Lớp — Quản lý lớp dạy kèm</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-const SUPABASE_URL = 'https://YOUR-PROJECT-REF.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 :root{
   --paper:#F2F7FC;
@@ -309,6 +309,8 @@ table.data-table tbody tr:last-child td{border-bottom:none;}
 .mode-pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;}
 .mode-pill.online{background:#E3F0FF;color:#1C6FD9;}
 .mode-pill.offline{background:#FBF0D9;color:#B07F17;}
+.student-name-link{cursor:pointer;}
+.student-name-link:hover{color:var(--rule);text-decoration:underline;}
 
 /* ---------- Requests / feedback list ---------- */
 .list-card{border:1px solid var(--line);border-radius:9px;padding:13px 16px;margin-bottom:10px;background:var(--panel);}
@@ -419,12 +421,12 @@ let state = null;
 function seedData(){
   const today = new Date();
   const classes = [
-    {id:uid(), name:'Toán 8', subject:'Toán', level:'Lớp 8', fee:150000, schedule:'T2, T4, T6 — 19:00-20:30', color:CLASS_COLORS[0], note:'Lớp ôn tập kiến thức nền', mode:'offline'},
-    {id:uid(), name:'Toán 9 CB', subject:'Toán', level:'Lớp 9', fee:180000, schedule:'T3, T5, T7 — 14:00-16:00', color:CLASS_COLORS[1], note:'Chuẩn bị thi vào 10', mode:'offline'},
-    {id:uid(), name:'Toán 9 NC', subject:'Toán', level:'Lớp 9', fee:200000, schedule:'T2, T4, T6 — 09:30-11:30', color:CLASS_COLORS[2], note:'Lớp nâng cao, luyện đề', mode:'online'},
-    {id:uid(), name:'Toán 10', subject:'Toán', level:'Lớp 10', fee:220000, schedule:'T2, T4, T6 — 16:00-18:00', color:CLASS_COLORS[3], note:'', mode:'offline'},
-    {id:uid(), name:'Toán 11', subject:'Toán', level:'Lớp 11', fee:250000, schedule:'T3, T5, T7 — 17:00-19:00', color:CLASS_COLORS[4], note:'', mode:'online'},
-    {id:uid(), name:'Toán 12', subject:'Toán', level:'Lớp 12', fee:250000, schedule:'T4, T7 — 09:30-11:30', color:CLASS_COLORS[5], note:'Luyện thi tốt nghiệp', mode:'offline'},
+    {id:uid(), name:'Toán 8', subject:'Toán', level:'Lớp 8', fee:150000, schedule:'T2, T4, T6 — 19:00-20:30', color:CLASS_COLORS[0], note:'Lớp ôn tập kiến thức nền', mode:'offline', courseSessions:24},
+    {id:uid(), name:'Toán 9 CB', subject:'Toán', level:'Lớp 9', fee:180000, schedule:'T3, T5, T7 — 14:00-16:00', color:CLASS_COLORS[1], note:'Chuẩn bị thi vào 10', mode:'offline', courseSessions:30},
+    {id:uid(), name:'Toán 9 NC', subject:'Toán', level:'Lớp 9', fee:200000, schedule:'T2, T4, T6 — 09:30-11:30', color:CLASS_COLORS[2], note:'Lớp nâng cao, luyện đề', mode:'online', courseSessions:30},
+    {id:uid(), name:'Toán 10', subject:'Toán', level:'Lớp 10', fee:220000, schedule:'T2, T4, T6 — 16:00-18:00', color:CLASS_COLORS[3], note:'', mode:'offline', courseSessions:24},
+    {id:uid(), name:'Toán 11', subject:'Toán', level:'Lớp 11', fee:250000, schedule:'T3, T5, T7 — 17:00-19:00', color:CLASS_COLORS[4], note:'', mode:'online', courseSessions:24},
+    {id:uid(), name:'Toán 12', subject:'Toán', level:'Lớp 12', fee:250000, schedule:'T4, T7 — 09:30-11:30', color:CLASS_COLORS[5], note:'Luyện thi tốt nghiệp', mode:'offline', courseSessions:20},
   ];
   const byName = n => classes.find(c=>c.name===n);
   const students = [
@@ -520,7 +522,7 @@ async function loadState(){
   // 1) Ưu tiên Supabase nếu đã cấu hình
   if(SUPABASE_ENABLED){
     try{
-      const { data, error } = await sb.from('so_lop_state').select('data').eq('id', SUPABASE_ROW_ID).maybeSingle();
+      const { data, error } = await sb.from('app_state').select('data').eq('id', SUPABASE_ROW_ID).maybeSingle();
       if(error) throw error;
       if(data && data.data){
         state = data.data;
@@ -549,7 +551,7 @@ async function persist(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ console.error('localStorage lỗi', e); }
   if(SUPABASE_ENABLED){
     try{
-      const { error } = await sb.from('so_lop_state').upsert({ id: SUPABASE_ROW_ID, data: state, updated_at: new Date().toISOString() });
+      const { error } = await sb.from('app_state').upsert({ id: SUPABASE_ROW_ID, data: state, updated_at: new Date().toISOString() });
       if(error) throw error;
     }catch(e){
       console.error('Supabase lưu lỗi:', e);
@@ -1158,6 +1160,7 @@ function renderClasses(){
       <td>${escapeHtml(c.level)}</td>
       <td>${stCount} học sinh</td>
       <td class="mono">${fmtMoney(c.fee)}/buổi</td>
+      <td class="mono">${c.courseSessions? c.courseSessions+' buổi' : '—'}</td>
       <td style="font-size:12.5px;color:var(--ink-soft);">${escapeHtml(c.schedule)}</td>
       <td>
         <div class="row gap8">
@@ -1178,8 +1181,8 @@ function renderClasses(){
     </div>
     <div class="panel">
       <table class="data-table">
-        <thead><tr><th>Tên lớp</th><th>Hình thức</th><th>Khối</th><th>Sĩ số</th><th>Học phí</th><th>Lịch cố định</th><th></th></tr></thead>
-        <tbody>${rows || '<tr class="empty-row"><td colspan="7">Chưa có lớp học nào</td></tr>'}</tbody>
+        <thead><tr><th>Tên lớp</th><th>Hình thức</th><th>Khối</th><th>Sĩ số</th><th>Học phí</th><th>Số buổi</th><th>Lịch cố định</th><th></th></tr></thead>
+        <tbody>${rows || '<tr class="empty-row"><td colspan="8">Chưa có lớp học nào</td></tr>'}</tbody>
       </table>
     </div>
   `;
@@ -1195,11 +1198,14 @@ function classFormHtml(existing){
       <div class="field"><label>Môn học</label><input name="subject" value="${existing?escapeHtml(existing.subject):'Toán'}" required></div>
       <div class="field"><label>Học phí / buổi (đ)</label><input type="number" name="fee" min="0" step="1000" value="${existing?existing.fee:150000}" required></div>
     </div>
-    <div class="field"><label>Hình thức học</label>
-      <div class="check-grid">
-        <label class="check-chip"><input type="radio" name="mode" value="offline" ${!existing||existing.mode!=='online'?'checked':''}> Offline (trực tiếp)</label>
-        <label class="check-chip"><input type="radio" name="mode" value="online" ${existing&&existing.mode==='online'?'checked':''}> Online</label>
+    <div class="field-row">
+      <div class="field"><label>Hình thức học</label>
+        <div class="check-grid">
+          <label class="check-chip"><input type="radio" name="mode" value="offline" ${!existing||existing.mode!=='online'?'checked':''}> Offline (trực tiếp)</label>
+          <label class="check-chip"><input type="radio" name="mode" value="online" ${existing&&existing.mode==='online'?'checked':''}> Online</label>
+        </div>
       </div>
+      <div class="field"><label>Tổng số buổi khoá học</label><input type="number" name="courseSessions" min="0" value="${existing&&existing.courseSessions?existing.courseSessions:''}" placeholder="VD: 20"></div>
     </div>
     <div class="field"><label>Lịch cố định (mô tả)</label><input name="schedule" value="${existing?escapeHtml(existing.schedule):''}" placeholder="VD: T2, T4, T6 — 19:00-20:30"></div>
     <div class="field"><label>Màu hiển thị</label>
@@ -1224,7 +1230,7 @@ function renderStudents(){
   const rows = state.students.map(s=>{
     const cl = classById(s.classId);
     return `<tr>
-      <td><b>${escapeHtml(s.name)}</b><div style="font-size:11.5px;color:var(--ink-faint);">${s.dob?fmtDateFull(s.dob):''}</div></td>
+      <td><b class="student-name-link" data-action="view-student-fee" data-id="${s.id}" title="Xem phiếu học phí">${escapeHtml(s.name)}</b><div style="font-size:11.5px;color:var(--ink-faint);">${s.dob?fmtDateFull(s.dob):''}</div></td>
       <td>${cl?`<span class="dot" style="background:${cl.color}"></span>${escapeHtml(cl.name)}`:'—'}</td>
       <td>${escapeHtml(s.parentName)}<div style="font-size:11.5px;color:var(--ink-faint);">${escapeHtml(s.parentPhone)}</div></td>
       <td><span class="badge ${s.status==='active'?'badge-good':'badge-flat'}">${s.status==='active'?'Đang học':'Tạm nghỉ'}</span></td>
@@ -1474,7 +1480,7 @@ function renderTuition(){
     const st = studentById(inv.studentId);
     const total = inv.sessions*inv.feePerSession + Number(inv.extra||0);
     return `<tr>
-      <td>${st?escapeHtml(st.name):'—'}</td>
+      <td><b class="student-name-link" data-action="view-invoice" data-id="${inv.id}" title="Xem phiếu học phí">${st?escapeHtml(st.name):'—'}</b></td>
       <td>${monthLabel(inv.month)}</td>
       <td>${inv.sessions} buổi</td>
       <td class="mono">${fmtMoney(inv.feePerSession)}</td>
@@ -1510,12 +1516,14 @@ function renderTuition(){
   `;
 }
 
-function invoiceFormHtml(existing){
-  const st = existing? studentById(existing.studentId) : null;
+function invoiceFormHtml(existing, presetStudentId){
+  const st = existing? studentById(existing.studentId) : (presetStudentId? studentById(presetStudentId) : null);
   const cl = st? classById(st.classId) : null;
   return `<form id="modalForm">
     <div class="field-row">
-      <div class="field"><label>Học sinh</label><select name="studentId" required>${studentOptionsHtml(existing?existing.studentId:'')}</select></div>
+      <div class="field"><label>Học sinh</label><select name="studentId" required ${presetStudentId&&!existing?'disabled':''}>${studentOptionsHtml(existing?existing.studentId:(presetStudentId||''))}</select>
+      ${presetStudentId&&!existing?`<input type="hidden" name="studentId" value="${presetStudentId}">`:''}
+      </div>
       <div class="field"><label>Tháng học phí</label><input type="month" name="month" value="${existing?existing.month:currentMonthKey()}" required></div>
     </div>
     <div class="field-row">
@@ -1566,6 +1574,7 @@ function invoicePreviewHtml(inv){
         <div class="fee-card-row"><span class="k">Hình thức học</span><span class="v">${mode==='online'?'Online':'Offline'}</span></div>
         <div class="fee-card-row"><span class="k">Học phí / buổi</span><span class="v">${fmtMoney(inv.feePerSession)}</span></div>
         <div class="fee-card-row"><span class="k">Số buổi đã học</span><span class="v">${inv.sessions} buổi</span></div>
+        ${cl&&cl.courseSessions?`<div class="fee-card-row"><span class="k">Tổng số buổi khoá học</span><span class="v">${cl.courseSessions} buổi</span></div>`:''}
         ${inv.extra?`<div class="fee-card-row"><span class="k">Phụ phí</span><span class="v">${fmtMoney(inv.extra)}</span></div>`:''}
         ${sessDates.length?`<div style="margin-top:8px;"><div class="fee-card-sessions">${sessDates.map((s,i)=>`<span>Buổi ${i+1} (${s.date.slice(8,10)}/${s.date.slice(5,7)})</span>`).join('')}</div></div>`:''}
       </div>
@@ -1850,13 +1859,13 @@ function handleContentClick(e){
 
     /* classes */
     case 'open-add-class': openModal('Thêm lớp học', classFormHtml(null), (data)=>{
-        state.classes.push({id:uid(), name:data.name, level:data.level, subject:data.subject, fee:Number(data.fee), schedule:data.schedule||'', color:data.color||CLASS_COLORS[0], note:data.note||'', mode:data.mode==='online'?'online':'offline'});
+        state.classes.push({id:uid(), name:data.name, level:data.level, subject:data.subject, fee:Number(data.fee), schedule:data.schedule||'', color:data.color||CLASS_COLORS[0], note:data.note||'', mode:data.mode==='online'?'online':'offline', courseSessions:data.courseSessions?Number(data.courseSessions):0});
         scheduleSave(); renderView(); toast('Đã thêm lớp học');
       }); break;
     case 'edit-class': {
       const cl = classById(id); if(!cl) return;
       openModal('Sửa lớp học', classFormHtml(cl), (data)=>{
-        Object.assign(cl, {name:data.name, level:data.level, subject:data.subject, fee:Number(data.fee), schedule:data.schedule||'', color:data.color||cl.color, note:data.note||'', mode:data.mode==='online'?'online':'offline'});
+        Object.assign(cl, {name:data.name, level:data.level, subject:data.subject, fee:Number(data.fee), schedule:data.schedule||'', color:data.color||cl.color, note:data.note||'', mode:data.mode==='online'?'online':'offline', courseSessions:data.courseSessions?Number(data.courseSessions):0});
         scheduleSave(); renderView(); toast('Đã lưu thay đổi');
       });
       break;
@@ -1931,6 +1940,22 @@ function handleContentClick(e){
     case 'view-invoice': {
       const inv = state.invoices.find(x=>x.id===id); if(!inv) return;
       openModal('Phiếu học phí', invoicePreviewHtml(inv), null, true);
+      break;
+    }
+    case 'view-student-fee': {
+      const st = studentById(id); if(!st) return;
+      const mKey = currentMonthKey();
+      const invList = state.invoices.filter(i=>i.studentId===id).sort((a,b)=>b.month.localeCompare(a.month));
+      const inv = invList.find(i=>i.month===mKey) || invList[0];
+      if(inv){
+        openModal('Phiếu học phí', invoicePreviewHtml(inv), null, true);
+      } else {
+        openModal('Tạo phiếu học phí', invoiceFormHtml(null, id), (data)=>{
+          state.invoices.push({id:uid(), studentId:data.studentId, month:data.month, sessions:Number(data.sessions), feePerSession:Number(data.feePerSession), extra:Number(data.extra||0), note:data.note||'', status:data.status||'unpaid'});
+          scheduleSave(); renderView(); toast('Đã tạo phiếu học phí');
+        });
+        toast('Học sinh chưa có phiếu học phí nào — hãy tạo phiếu đầu tiên');
+      }
       break;
     }
     case 'mark-paid': {
