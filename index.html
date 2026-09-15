@@ -6,6 +6,8 @@
 <title>Sổ Lớp — Quản lý lớp dạy kèm</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 :root{
   --paper:#F2F7FC;
@@ -90,7 +92,13 @@ h1,h2,h3,.serif{font-family:'Lora',serif;}
 
 .sidebar-foot{border-top:1px solid var(--line-soft);padding:12px;}
 .teacher-chip{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;}
-.teacher-avatar{width:30px;height:30px;border-radius:50%;background:var(--gold-bg);color:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;}
+.teacher-avatar{width:30px;height:30px;border-radius:50%;background:var(--gold-bg);color:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;overflow:hidden;}
+.teacher-avatar img{width:100%;height:100%;object-fit:cover;}
+.avatar-upload{display:flex;align-items:center;gap:14px;margin-bottom:16px;}
+.avatar-upload .preview{width:64px;height:64px;border-radius:50%;background:var(--gold-bg);color:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;flex-shrink:0;overflow:hidden;border:1px solid var(--line);}
+.avatar-upload .preview img{width:100%;height:100%;object-fit:cover;}
+.avatar-upload .actions{display:flex;flex-direction:column;gap:6px;}
+.avatar-upload input[type=file]{display:none;}
 .teacher-chip .t-name{font-size:13px;font-weight:600;color:var(--ink);line-height:1.2;}
 .teacher-chip .t-role{font-size:11px;color:var(--ink-faint);}
 
@@ -265,6 +273,43 @@ table.data-table tbody tr:last-child td{border-bottom:none;}
 .invoice-kv b{color:var(--ink);}
 .invoice-note{background:var(--panel-2);border-radius:8px;padding:12px 14px;font-size:12.5px;color:var(--ink-soft);margin-top:12px;}
 
+/* ---------- Fee card (ảnh phiếu học phí xuất ra) ---------- */
+.fee-card{width:520px;max-width:100%;background:linear-gradient(180deg,#EAF3FE 0%,#F7FBFF 60%);border:1px solid var(--line);border-radius:16px;padding:20px;margin:0 auto;font-family:'Inter',system-ui,sans-serif;}
+.fee-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;}
+.fee-card-top .gv{font-weight:700;font-size:13px;color:var(--rule-dark);}
+.fee-card-top .phone{font-size:11.5px;color:var(--ink-soft);}
+.fee-card-title-wrap{background:var(--rule);border-radius:14px;padding:16px 18px;text-align:center;color:#fff;margin:10px 0 16px 0;}
+.fee-card-title-wrap .kind{font-size:11px;letter-spacing:1.5px;opacity:.85;text-transform:uppercase;margin-bottom:2px;}
+.fee-card-title-wrap .title{font-family:'Lora',serif;font-size:22px;font-weight:700;line-height:1.2;}
+.fee-card-title-wrap .month{font-size:12.5px;opacity:.9;margin-top:4px;}
+.fee-card-section{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
+.fee-card-section .sec-title{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;color:var(--rule-dark);margin-bottom:10px;}
+.fee-card-row{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px dashed var(--line-soft);}
+.fee-card-row:last-child{border-bottom:none;}
+.fee-card-row .k{color:var(--ink-soft);}
+.fee-card-row .v{font-weight:600;color:var(--ink);text-align:right;}
+.fee-card-total{background:var(--ink);border-radius:12px;padding:14px 16px;text-align:center;color:#fff;margin-bottom:12px;}
+.fee-card-total .l{font-size:11.5px;opacity:.8;margin-bottom:2px;}
+.fee-card-total .v{font-family:'Lora',serif;font-size:24px;font-weight:700;}
+.fee-card-status{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:20px;margin-top:6px;}
+.fee-card-status.paid{background:rgba(46,196,120,.35);color:#fff;}
+.fee-card-status.unpaid{background:rgba(226,90,90,.35);color:#fff;}
+.fee-card-sessions{display:flex;flex-wrap:wrap;gap:6px;}
+.fee-card-sessions span{background:var(--rule-bg);color:var(--rule-dark);font-size:11px;padding:3px 8px;border-radius:6px;}
+.fee-card-pay{display:flex;gap:14px;align-items:center;}
+.fee-card-pay img{width:92px;height:92px;border-radius:8px;border:1px solid var(--line);flex-shrink:0;}
+.fee-card-pay .info{font-size:12px;line-height:1.7;color:var(--ink-soft);}
+.fee-card-pay .info b{color:var(--ink);}
+.fee-card-foot{text-align:center;font-size:12px;color:var(--rule-dark);font-style:italic;margin-top:4px;}
+
+/* ---------- Class mode tabs ---------- */
+.mode-tabs{display:flex;gap:6px;background:var(--panel-2);border-radius:9px;padding:4px;width:fit-content;}
+.mode-tab{padding:7px 14px;border-radius:6px;font-size:13px;font-weight:600;color:var(--ink-soft);cursor:pointer;}
+.mode-tab.active{background:var(--panel);color:var(--rule-dark);box-shadow:var(--shadow);}
+.mode-pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;}
+.mode-pill.online{background:#E3F0FF;color:#1C6FD9;}
+.mode-pill.offline{background:#FBF0D9;color:#B07F17;}
+
 /* ---------- Requests / feedback list ---------- */
 .list-card{border:1px solid var(--line);border-radius:9px;padding:13px 16px;margin-bottom:10px;background:var(--panel);}
 .list-card .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
@@ -344,6 +389,18 @@ table.data-table tbody tr:last-child td{border-bottom:none;}
 const uid = () => 'id' + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
 const STORAGE_KEY = 'so-lop-data-v1';
 
+/* =========================================================
+   SUPABASE CONFIG
+   Dán URL và anon key dự án Supabase của bạn vào đây.
+   Xem hướng dẫn tạo bảng ở phần chat kèm theo file này.
+   ========================================================= */
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';       // vd: https://abcxyz.supabase.co
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_ROW_ID = 'main';                 // id cố định của dòng dữ liệu duy nhất
+
+const SUPABASE_ENABLED = typeof SUPABASE_URL === 'string' && SUPABASE_URL.startsWith('http') && window.supabase;
+const sb = SUPABASE_ENABLED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
 const CLASS_COLORS = ['#5B6FCF','#3F7A5C','#A6791E','#B3402A','#7C5CBF','#2E8B8B','#C0577A'];
 const WEEKDAY_SHORT = ['CN','T2','T3','T4','T5','T6','T7'];
 
@@ -362,12 +419,12 @@ let state = null;
 function seedData(){
   const today = new Date();
   const classes = [
-    {id:uid(), name:'Toán 8', subject:'Toán', level:'Lớp 8', fee:150000, schedule:'T2, T4, T6 — 19:00-20:30', color:CLASS_COLORS[0], note:'Lớp ôn tập kiến thức nền'},
-    {id:uid(), name:'Toán 9 CB', subject:'Toán', level:'Lớp 9', fee:180000, schedule:'T3, T5, T7 — 14:00-16:00', color:CLASS_COLORS[1], note:'Chuẩn bị thi vào 10'},
-    {id:uid(), name:'Toán 9 NC', subject:'Toán', level:'Lớp 9', fee:200000, schedule:'T2, T4, T6 — 09:30-11:30', color:CLASS_COLORS[2], note:'Lớp nâng cao, luyện đề'},
-    {id:uid(), name:'Toán 10', subject:'Toán', level:'Lớp 10', fee:220000, schedule:'T2, T4, T6 — 16:00-18:00', color:CLASS_COLORS[3], note:''},
-    {id:uid(), name:'Toán 11', subject:'Toán', level:'Lớp 11', fee:250000, schedule:'T3, T5, T7 — 17:00-19:00', color:CLASS_COLORS[4], note:''},
-    {id:uid(), name:'Toán 12', subject:'Toán', level:'Lớp 12', fee:250000, schedule:'T4, T7 — 09:30-11:30', color:CLASS_COLORS[5], note:'Luyện thi tốt nghiệp'},
+    {id:uid(), name:'Toán 8', subject:'Toán', level:'Lớp 8', fee:150000, schedule:'T2, T4, T6 — 19:00-20:30', color:CLASS_COLORS[0], note:'Lớp ôn tập kiến thức nền', mode:'offline'},
+    {id:uid(), name:'Toán 9 CB', subject:'Toán', level:'Lớp 9', fee:180000, schedule:'T3, T5, T7 — 14:00-16:00', color:CLASS_COLORS[1], note:'Chuẩn bị thi vào 10', mode:'offline'},
+    {id:uid(), name:'Toán 9 NC', subject:'Toán', level:'Lớp 9', fee:200000, schedule:'T2, T4, T6 — 09:30-11:30', color:CLASS_COLORS[2], note:'Lớp nâng cao, luyện đề', mode:'online'},
+    {id:uid(), name:'Toán 10', subject:'Toán', level:'Lớp 10', fee:220000, schedule:'T2, T4, T6 — 16:00-18:00', color:CLASS_COLORS[3], note:'', mode:'offline'},
+    {id:uid(), name:'Toán 11', subject:'Toán', level:'Lớp 11', fee:250000, schedule:'T3, T5, T7 — 17:00-19:00', color:CLASS_COLORS[4], note:'', mode:'online'},
+    {id:uid(), name:'Toán 12', subject:'Toán', level:'Lớp 12', fee:250000, schedule:'T4, T7 — 09:30-11:30', color:CLASS_COLORS[5], note:'Luyện thi tốt nghiệp', mode:'offline'},
   ];
   const byName = n => classes.find(c=>c.name===n);
   const students = [
@@ -452,30 +509,53 @@ function seedData(){
     bankName:'MB Bank',
     subjectDefault:'Toán',
     address:'',
-    note:''
+    note:'',
+    avatarUrl:''
   };
 
   return {classes, students, assistants, sessions, studyLogs, grades, invoices, payments, requests, feedback, settings};
 }
 
 async function loadState(){
-  try{
-    const res = await window.storage.get(STORAGE_KEY, false);
-    if(res && res.value){
-      state = JSON.parse(res.value);
-      return;
+  // 1) Ưu tiên Supabase nếu đã cấu hình
+  if(SUPABASE_ENABLED){
+    try{
+      const { data, error } = await sb.from('so_lop_state').select('data').eq('id', SUPABASE_ROW_ID).maybeSingle();
+      if(error) throw error;
+      if(data && data.data){
+        state = data.data;
+        // vẫn giữ một bản sao ở localStorage để mở nhanh lần sau / phòng mất mạng
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+        return;
+      }
+    }catch(e){
+      console.error('Supabase load lỗi, dùng dữ liệu cục bộ:', e);
+      toast('Không tải được dữ liệu từ Supabase, dùng bản lưu cục bộ');
     }
-  }catch(e){ /* not found or error -> seed */ }
+  }
+  // 2) Nếu chưa cấu hình Supabase hoặc lỗi mạng -> dùng localStorage
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){ state = JSON.parse(raw); return; }
+  }catch(e){ /* ignore */ }
+  // 3) Lần đầu chạy -> dữ liệu mẫu
   state = seedData();
   await persist();
 }
 
 let saveTimer=null;
 async function persist(){
-  try{
-    const result = await window.storage.set(STORAGE_KEY, JSON.stringify(state), false);
-    if(!result){ console.error('Lưu dữ liệu thất bại'); }
-  }catch(e){ console.error('Storage error', e); }
+  // Luôn lưu cục bộ trước để không mất dữ liệu nếu mất mạng
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ console.error('localStorage lỗi', e); }
+  if(SUPABASE_ENABLED){
+    try{
+      const { error } = await sb.from('so_lop_state').upsert({ id: SUPABASE_ROW_ID, data: state, updated_at: new Date().toISOString() });
+      if(error) throw error;
+    }catch(e){
+      console.error('Supabase lưu lỗi:', e);
+      toast('Không đồng bộ được lên Supabase (đã lưu tạm ở máy)');
+    }
+  }
 }
 function scheduleSave(){
   clearTimeout(saveTimer);
@@ -590,7 +670,12 @@ function renderSidebar(){
     el.addEventListener('click', ()=>{ navigate(el.getAttribute('data-view')); });
   });
   document.getElementById('sbName').textContent = state.settings.teacherName || 'Giáo viên';
-  document.getElementById('sbAvatar').textContent = (state.settings.teacherName||'G').trim().charAt(0).toUpperCase();
+  const sbAvatar = document.getElementById('sbAvatar');
+  if(state.settings.avatarUrl){
+    sbAvatar.innerHTML = `<img src="${state.settings.avatarUrl}" alt="Ảnh đại diện">`;
+  } else {
+    sbAvatar.textContent = (state.settings.teacherName||'G').trim().charAt(0).toUpperCase();
+  }
 }
 
 const PAGE_META = {
@@ -636,6 +721,100 @@ function renderView(){
     settings: renderSettings,
   };
   c.innerHTML = (renderers[currentView]||(()=>'<p>Không tìm thấy trang.</p>'))();
+}
+
+/* =========================================================
+   PIE CHART (SVG)
+   items: [{label, value, color}]
+   ========================================================= */
+function pieChartSVG(items, opts){
+  opts = opts||{};
+  const size = opts.size || 168;
+  const r = size/2;
+  const cx = r, cy = r;
+  const total = items.reduce((s,i)=>s+i.value,0) || 1;
+  let angle = -90; // start at top
+  let paths = '';
+  items.forEach(it=>{
+    const frac = it.value/total;
+    const sweep = frac*360;
+    if(frac<=0){ return; }
+    if(frac>=0.9999){
+      paths += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${it.color}"></circle>`;
+    } else {
+      const a0 = angle*Math.PI/180, a1 = (angle+sweep)*Math.PI/180;
+      const x0 = cx + r*Math.cos(a0), y0 = cy + r*Math.sin(a0);
+      const x1 = cx + r*Math.cos(a1), y1 = cy + r*Math.sin(a1);
+      const large = sweep>180?1:0;
+      paths += `<path d="M${cx},${cy} L${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${large} 1 ${x1.toFixed(2)},${y1.toFixed(2)} Z" fill="${it.color}"></path>`;
+    }
+    angle += sweep;
+  });
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${paths}<circle cx="${cx}" cy="${cy}" r="${r*0.56}" fill="var(--panel)"></circle></svg>`;
+}
+function pieLegendHtml(items){
+  const total = items.reduce((s,i)=>s+i.value,0) || 1;
+  return items.map(it=>`
+    <div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line-soft);">
+      <div class="row gap10"><span class="dot" style="background:${it.color}"></span><span style="font-size:13px;color:var(--ink-soft);">${escapeHtml(it.label)}</span></div>
+      <div class="row gap10">
+        <span class="mono" style="font-size:12px;color:var(--ink-faint);">${(it.value/total*100).toFixed(0)}%</span>
+        <span class="mono" style="font-size:13px;font-weight:600;">${fmtMoney(it.value)}</span>
+      </div>
+    </div>`).join('');
+}
+
+/* =========================================================
+   VIETQR BANK BIN MAPPING (để tạo mã QR chuyển khoản)
+   ========================================================= */
+const VIETQR_BANKS = [
+  ['mb','970422'],['military','970422'],
+  ['vietcombank','970436'],['vcb','970436'],
+  ['techcombank','970407'],['tcb','970407'],
+  ['bidv','970418'],
+  ['vietinbank','970415'],['ctg','970415'],
+  ['agribank','970405'],
+  ['acb','970416'],
+  ['tpbank','970423'],['tp bank','970423'],
+  ['vpbank','970432'],['vp bank','970432'],
+  ['sacombank','970403'],['stb','970403'],
+  ['hdbank','970437'],
+  ['shb','970443'],
+  ['msb','970426'],['maritime','970426'],
+  ['seabank','970440'],
+  ['ocb','970448'],
+  ['vib','970441'],
+  ['eximbank','970431'],
+  ['scb','970429'],
+  ['abbank','970425'],
+  ['namabank','970428'],['nam a bank','970428'],
+  ['pvcombank','970412'],
+  ['bac a bank','970409'],['baca bank','970409'],
+  ['baovietbank','970438'],
+  ['lienvietpostbank','970449'],['lpbank','970449'],
+  ['pgbank','970430'],
+  ['saigonbank','970400'],
+  ['vietabank','970427'],
+  ['vietbank','970433'],
+  ['kienlongbank','970452'],
+  ['shinhan','970424'],
+  ['cbbank','970444'],
+  ['coopbank','970446'],
+];
+function bankBin(bankName){
+  const n = (bankName||'').toLowerCase();
+  const found = VIETQR_BANKS.find(([kw])=>n.includes(kw));
+  return found? found[1] : null;
+}
+function vietQrImage(bankName, account, amount, addInfo, accountName){
+  const bin = bankBin(bankName);
+  if(!bin || !account) return null;
+  const params = new URLSearchParams({
+    amount: Math.max(0, Math.round(amount||0)),
+    addInfo: addInfo||'',
+    accountName: accountName||''
+  });
+  return `https://img.vietqr.io/image/${bin}-${account}-compact2.png?${params.toString()}`;
 }
 
 /* helpers */
@@ -741,29 +920,24 @@ function renderOverview(){
       <div class="panel panel-pad" style="flex:1;">
         <div class="panel-title mb16">Doanh thu theo lớp</div>
         <div class="panel-sub mb16" style="margin-top:-10px;">Theo tiến thực thu — ${monthLabel(mKey)}</div>
-        ${revByClass.map(r=>`
-          <div class="bar-row">
-            <div class="b-label">${escapeHtml(r.name)}</div>
-            <div class="bar-track"><div class="bar-fill" style="width:${(r.value/maxRev*100).toFixed(0)}%;background:${r.color};"></div></div>
-            <div class="b-val mono">${fmtMoney(r.value)}</div>
-          </div>
-        `).join('')}
+        ${revByClass.some(r=>r.value>0) ? `
+        <div class="row gap16" style="align-items:center;">
+          <div style="flex-shrink:0;">${pieChartSVG(revByClass.map(r=>({label:r.name,value:r.value,color:r.color})), {size:150})}</div>
+          <div style="flex:1;min-width:0;">${pieLegendHtml(revByClass.map(r=>({label:r.name,value:r.value,color:r.color})))}</div>
+        </div>` : '<div class="empty-state"><div class="msg">Chưa có doanh thu để hiển thị</div></div>'}
       </div>
     </div>
     <div class="panel panel-pad mb24" style="margin-top:16px;">
       <div class="panel-title mb16">Doanh thu 6 tháng gần đây</div>
-      <div class="row gap12" style="align-items:flex-end;height:140px;">
-        ${revByMonth.map(r=>`
-          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
-            <div class="mono" style="font-size:11px;color:var(--ink-faint);">${(r.val/1000000).toFixed(1)}tr</div>
-            <div style="width:60%;background:var(--rule);border-radius:4px 4px 0 0;height:${Math.max(4,(r.val/maxMonthRev*90))}px;"></div>
-            <div style="font-size:11px;color:var(--ink-soft);">${r.mk.slice(5)}/${r.mk.slice(2,4)}</div>
-          </div>
-        `).join('')}
-      </div>
+      ${revByMonth.some(r=>r.val>0) ? `
+      <div class="row gap16" style="align-items:center;">
+        <div style="flex-shrink:0;">${pieChartSVG(revByMonth.map((r,i)=>({label:`${r.mk.slice(5)}/${r.mk.slice(2,4)}`,value:r.val,color:MONTH_PIE_COLORS[i%MONTH_PIE_COLORS.length]})), {size:150})}</div>
+        <div style="flex:1;min-width:0;">${pieLegendHtml(revByMonth.map((r,i)=>({label:`Tháng ${r.mk.slice(5)}/${r.mk.slice(2,4)}`,value:r.val,color:MONTH_PIE_COLORS[i%MONTH_PIE_COLORS.length]})))}</div>
+      </div>` : '<div class="empty-state"><div class="msg">Chưa có doanh thu để hiển thị</div></div>'}
     </div>
   `;
 }
+const MONTH_PIE_COLORS = ['#1C6FD9','#1F8A5F','#C23B3B','#B07F17','#7B5EC7','#2AA1A1'];
 
 /* =========================================================
    REPORTS
@@ -970,11 +1144,17 @@ function sessionFormHtml(existing){
 /* =========================================================
    CLASSES
    ========================================================= */
+let classModeFilter = 'all';
 function renderClasses(){
-  const rows = state.classes.map(c=>{
+  const filtered = state.classes.filter(c=>classModeFilter==='all'||( (c.mode||'offline')===classModeFilter ));
+  const countOnline = state.classes.filter(c=>c.mode==='online').length;
+  const countOffline = state.classes.filter(c=>(c.mode||'offline')==='offline').length;
+  const rows = filtered.map(c=>{
     const stCount = studentsOfClass(c.id).length;
+    const mode = c.mode==='online'?'online':'offline';
     return `<tr>
       <td><span class="dot" style="background:${c.color}"></span><b>${escapeHtml(c.name)}</b></td>
+      <td><span class="mode-pill ${mode}">${mode==='online'?'Online':'Offline'}</span></td>
       <td>${escapeHtml(c.level)}</td>
       <td>${stCount} học sinh</td>
       <td class="mono">${fmtMoney(c.fee)}/buổi</td>
@@ -989,13 +1169,17 @@ function renderClasses(){
   }).join('');
   return `
     <div class="row between mb16">
-      <div class="panel-sub" style="font-size:13px;">${state.classes.length} lớp đang giảng dạy</div>
+      <div class="mode-tabs">
+        <div class="mode-tab ${classModeFilter==='all'?'active':''}" data-action="class-mode-filter" data-mode="all">Tất cả (${state.classes.length})</div>
+        <div class="mode-tab ${classModeFilter==='offline'?'active':''}" data-action="class-mode-filter" data-mode="offline">Offline (${countOffline})</div>
+        <div class="mode-tab ${classModeFilter==='online'?'active':''}" data-action="class-mode-filter" data-mode="online">Online (${countOnline})</div>
+      </div>
       <button class="btn btn-primary" data-action="open-add-class">+ Thêm lớp học</button>
     </div>
     <div class="panel">
       <table class="data-table">
-        <thead><tr><th>Tên lớp</th><th>Khối</th><th>Sĩ số</th><th>Học phí</th><th>Lịch cố định</th><th></th></tr></thead>
-        <tbody>${rows || '<tr class="empty-row"><td colspan="6">Chưa có lớp học nào</td></tr>'}</tbody>
+        <thead><tr><th>Tên lớp</th><th>Hình thức</th><th>Khối</th><th>Sĩ số</th><th>Học phí</th><th>Lịch cố định</th><th></th></tr></thead>
+        <tbody>${rows || '<tr class="empty-row"><td colspan="7">Chưa có lớp học nào</td></tr>'}</tbody>
       </table>
     </div>
   `;
@@ -1010,6 +1194,12 @@ function classFormHtml(existing){
     <div class="field-row">
       <div class="field"><label>Môn học</label><input name="subject" value="${existing?escapeHtml(existing.subject):'Toán'}" required></div>
       <div class="field"><label>Học phí / buổi (đ)</label><input type="number" name="fee" min="0" step="1000" value="${existing?existing.fee:150000}" required></div>
+    </div>
+    <div class="field"><label>Hình thức học</label>
+      <div class="check-grid">
+        <label class="check-chip"><input type="radio" name="mode" value="offline" ${!existing||existing.mode!=='online'?'checked':''}> Offline (trực tiếp)</label>
+        <label class="check-chip"><input type="radio" name="mode" value="online" ${existing&&existing.mode==='online'?'checked':''}> Online</label>
+      </div>
     </div>
     <div class="field"><label>Lịch cố định (mô tả)</label><input name="schedule" value="${existing?escapeHtml(existing.schedule):''}" placeholder="VD: T2, T4, T6 — 19:00-20:30"></div>
     <div class="field"><label>Màu hiển thị</label>
@@ -1352,42 +1542,57 @@ function invoicePreviewHtml(inv){
   const cl = st? classById(st.classId) : null;
   const total = inv.sessions*inv.feePerSession + Number(inv.extra||0);
   const settings = state.settings;
+  const mode = cl&&cl.mode==='online' ? 'online' : 'offline';
+  const sessDates = cl ? state.sessions.filter(s=>s.classId===cl.id && monthKey(s.date)===inv.month).sort((a,b)=>a.date.localeCompare(b.date)) : [];
+  const qrSrc = vietQrImage(settings.bankName, settings.bankAccount, total, `Hoc phi ${st?st.name:''} ${monthLabel(inv.month)}`.replace(/\s+/g,' ').trim(), (settings.teacherName||'').toUpperCase());
   return `
-    <div class="invoice">
-      <div class="invoice-head">
+    <div id="feeCardCapture" class="fee-card">
+      <div class="fee-card-top">
         <div>
-          <div class="t-name">GV. ${escapeHtml(settings.teacherName||'')}</div>
-          <div class="t-phone">SĐT: ${escapeHtml(settings.phone||'')}</div>
+          <div class="gv">GV. ${escapeHtml(settings.teacherName||'')}</div>
+          <div class="phone">SĐT: ${escapeHtml(settings.phone||'')}</div>
         </div>
-        <div class="invoice-total-box">
-          <div class="l">Tổng học phí</div>
-          <div class="v">${fmtMoney(total)}</div>
-        </div>
+        <span class="mode-pill ${mode}">${mode==='online'?'Online':'Offline'}</span>
       </div>
-      <div class="invoice-body">
-        <div class="invoice-title">Phiếu học phí</div>
-        <div class="invoice-sub">${monthLabel(inv.month)}</div>
-        <div class="invoice-grid">
-          <div>
-            <div class="invoice-kv">Họ và tên: <b>${st?escapeHtml(st.name):''}</b></div>
-            <div class="invoice-kv">Lớp: <b>${cl?escapeHtml(cl.name):''}</b></div>
-            <div class="invoice-kv">Số buổi học: <b>${inv.sessions} buổi</b></div>
-          </div>
-          <div>
-            <div class="invoice-kv">Học phí / buổi: <b>${fmtMoney(inv.feePerSession)}</b></div>
-            <div class="invoice-kv">Phụ phí: <b>${fmtMoney(inv.extra||0)}</b></div>
-            <div class="invoice-kv">Trạng thái: <b>${inv.status==='paid'?'Đã thu':'Chưa thu'}</b></div>
-          </div>
-        </div>
-        ${inv.note?`<div class="invoice-note"><b>Nhận xét:</b> ${escapeHtml(inv.note)}</div>`:''}
-        <div class="invoice-note" style="margin-top:8px;">
-          STK nhận học phí: <b class="mono">${escapeHtml(settings.bankAccount||'')}</b> — ${escapeHtml(settings.bankName||'')} · Chủ TK: ${escapeHtml((settings.teacherName||'').toUpperCase())}
-        </div>
+      <div class="fee-card-title-wrap">
+        <div class="kind">Phiếu học phí</div>
+        <div class="title">${cl?escapeHtml(cl.name):''}</div>
+        <div class="month">${monthLabel(inv.month)}</div>
       </div>
+      <div class="fee-card-section">
+        <div class="sec-title">Thông tin học sinh</div>
+        <div class="fee-card-row"><span class="k">Họ và tên</span><span class="v">${st?escapeHtml(st.name):''}</span></div>
+        <div class="fee-card-row"><span class="k">Lớp</span><span class="v">${cl?escapeHtml(cl.name):''}</span></div>
+        <div class="fee-card-row"><span class="k">Hình thức học</span><span class="v">${mode==='online'?'Online':'Offline'}</span></div>
+        <div class="fee-card-row"><span class="k">Học phí / buổi</span><span class="v">${fmtMoney(inv.feePerSession)}</span></div>
+        <div class="fee-card-row"><span class="k">Số buổi đã học</span><span class="v">${inv.sessions} buổi</span></div>
+        ${inv.extra?`<div class="fee-card-row"><span class="k">Phụ phí</span><span class="v">${fmtMoney(inv.extra)}</span></div>`:''}
+        ${sessDates.length?`<div style="margin-top:8px;"><div class="fee-card-sessions">${sessDates.map((s,i)=>`<span>Buổi ${i+1} (${s.date.slice(8,10)}/${s.date.slice(5,7)})</span>`).join('')}</div></div>`:''}
+      </div>
+      <div class="fee-card-total">
+        <div class="l">Tổng học phí</div>
+        <div class="v">${fmtMoney(total)}</div>
+        <div class="fee-card-status ${inv.status}">${inv.status==='paid'?'✓ Đã thu':'Chưa thu'}</div>
+      </div>
+      ${inv.note?`<div class="fee-card-section"><div class="sec-title">Nhận xét học tập</div><div style="font-size:12.5px;color:var(--ink-soft);line-height:1.6;">${escapeHtml(inv.note)}</div></div>`:''}
+      <div class="fee-card-section">
+        <div class="sec-title">Thông tin thanh toán</div>
+        <div class="fee-card-pay">
+          ${qrSrc?`<img src="${qrSrc}" alt="Mã QR chuyển khoản" crossorigin="anonymous">`:''}
+          <div class="info">
+            STK: <b class="mono">${escapeHtml(settings.bankAccount||'')}</b><br>
+            Ngân hàng: <b>${escapeHtml(settings.bankName||'')}</b><br>
+            Chủ TK: <b>${escapeHtml((settings.teacherName||'').toUpperCase())}</b>
+          </div>
+        </div>
+        ${!qrSrc?`<div style="font-size:11.5px;color:var(--ink-faint);margin-top:8px;">Chưa nhận diện được ngân hàng để tạo mã QR — vào Cài đặt kiểm tra lại tên ngân hàng (vd: MB Bank, Vietcombank, Techcombank...).</div>`:''}
+      </div>
+      <div class="fee-card-foot">Cảm ơn quý phụ huynh và chúc con học tốt! ♥</div>
     </div>
     <div class="row gap8 no-print" style="margin-top:16px;justify-content:flex-end;">
       <button class="btn btn-secondary" data-action="modal-close">Đóng</button>
-      <button class="btn btn-primary" data-action="print-invoice">In / Xuất phiếu</button>
+      <button class="btn btn-secondary" data-action="export-invoice-image">Xuất ảnh</button>
+      <button class="btn btn-primary" data-action="print-invoice">In / Xuất PDF</button>
     </div>
   `;
 }
@@ -1544,6 +1749,15 @@ function renderSettings(){
     <div class="panel panel-pad" style="max-width:560px;">
       <div class="panel-title mb16">Thông tin giáo viên</div>
       <form id="settingsForm">
+        <div class="avatar-upload">
+          <div class="preview" id="avatarPreview">${s.avatarUrl? `<img src="${s.avatarUrl}" alt="Ảnh đại diện">` : (s.teacherName||'G').trim().charAt(0).toUpperCase()}</div>
+          <div class="actions">
+            <label class="btn btn-secondary btn-sm" for="avatarFile" style="cursor:pointer;">Chọn ảnh đại diện</label>
+            <input type="file" id="avatarFile" accept="image/*">
+            ${s.avatarUrl? '<button type="button" class="btn btn-secondary btn-sm" data-action="remove-avatar">Xoá ảnh</button>' : ''}
+          </div>
+        </div>
+        <input type="hidden" name="avatarUrl" id="avatarUrlField" value="${escapeHtml(s.avatarUrl||'')}">
         <div class="field"><label>Họ và tên</label><input name="teacherName" value="${escapeHtml(s.teacherName)}" required></div>
         <div class="field-row">
           <div class="field"><label>Số điện thoại</label><input name="phone" value="${escapeHtml(s.phone)}"></div>
@@ -1571,6 +1785,23 @@ function attachDelegation(){
   document.getElementById('modal-root').addEventListener('click', handleModalClick);
 }
 
+async function exportInvoiceImage(){
+  const node = document.getElementById('feeCardCapture');
+  if(!node){ toast('Không tìm thấy phiếu để xuất ảnh'); return; }
+  if(typeof html2canvas==='undefined'){ toast('Chưa tải được thư viện xuất ảnh, kiểm tra kết nối mạng'); return; }
+  try{
+    toast('Đang tạo ảnh...');
+    const canvas = await html2canvas(node, {backgroundColor:'#F2F7FC', scale:2, useCORS:true});
+    const link = document.createElement('a');
+    link.download = 'phieu-hoc-phi.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }catch(e){
+    console.error(e);
+    toast('Xuất ảnh thất bại, thử dùng nút In / Xuất PDF thay thế');
+  }
+}
+
 function handleModalClick(e){
   const t = e.target.closest('[data-action]');
   if(!t) return;
@@ -1585,6 +1816,7 @@ function handleModalClick(e){
   if(action==='delete-grade'){ if(confirm('Xoá điểm số này?')){ state.grades = state.grades.filter(g=>g.id!==id); scheduleSave(); closeModal(); renderView(); toast('Đã xoá điểm số'); } }
   if(action==='delete-invoice'){ if(confirm('Xoá phiếu học phí này?')){ state.invoices = state.invoices.filter(i=>i.id!==id); scheduleSave(); closeModal(); renderView(); toast('Đã xoá phiếu học phí'); } }
   if(action==='print-invoice'){ window.print(); }
+  if(action==='export-invoice-image'){ exportInvoiceImage(); }
 }
 
 function handleContentClick(e){
@@ -1595,6 +1827,7 @@ function handleContentClick(e){
 
   switch(action){
     case 'nav': navigate(t.getAttribute('data-view')); break;
+    case 'class-mode-filter': classModeFilter = t.getAttribute('data-mode'); renderView(); break;
 
     /* schedule */
     case 'cal-prev': calCursor = calMode==='week'? addDays(calCursor,-7) : new Date(calCursor.getFullYear(), calCursor.getMonth()-1, 1); renderView(); break;
@@ -1617,13 +1850,13 @@ function handleContentClick(e){
 
     /* classes */
     case 'open-add-class': openModal('Thêm lớp học', classFormHtml(null), (data)=>{
-        state.classes.push({id:uid(), name:data.name, level:data.level, subject:data.subject, fee:Number(data.fee), schedule:data.schedule||'', color:data.color||CLASS_COLORS[0], note:data.note||''});
+        state.classes.push({id:uid(), name:data.name, level:data.level, subject:data.subject, fee:Number(data.fee), schedule:data.schedule||'', color:data.color||CLASS_COLORS[0], note:data.note||'', mode:data.mode==='online'?'online':'offline'});
         scheduleSave(); renderView(); toast('Đã thêm lớp học');
       }); break;
     case 'edit-class': {
       const cl = classById(id); if(!cl) return;
       openModal('Sửa lớp học', classFormHtml(cl), (data)=>{
-        Object.assign(cl, {name:data.name, level:data.level, subject:data.subject, fee:Number(data.fee), schedule:data.schedule||'', color:data.color||cl.color, note:data.note||''});
+        Object.assign(cl, {name:data.name, level:data.level, subject:data.subject, fee:Number(data.fee), schedule:data.schedule||'', color:data.color||cl.color, note:data.note||'', mode:data.mode==='online'?'online':'offline'});
         scheduleSave(); renderView(); toast('Đã lưu thay đổi');
       });
       break;
@@ -1727,6 +1960,17 @@ function handleContentClick(e){
         scheduleSave(); renderView(); toast('Đã ghi nhận thanh toán');
       }); break;
     case 'delete-payment': if(confirm('Xoá giao dịch này?')){ state.payments = state.payments.filter(p=>p.id!==id); scheduleSave(); renderView(); toast('Đã xoá giao dịch'); } break;
+
+    /* settings avatar */
+    case 'remove-avatar': {
+      const urlField = document.getElementById('avatarUrlField');
+      if(urlField) urlField.value = '';
+      const preview = document.getElementById('avatarPreview');
+      if(preview) preview.textContent = (document.querySelector('#settingsForm [name=teacherName]').value||'G').trim().charAt(0).toUpperCase();
+      const removeBtn = e.target.closest('[data-action="remove-avatar"]');
+      if(removeBtn) removeBtn.remove();
+      break;
+    }
   }
 }
 
@@ -1738,6 +1982,18 @@ function handleContentChange(e){
     const id = e.target.getAttribute('data-id');
     const r = state.requests.find(x=>x.id===id);
     if(r){ r.status = e.target.value; scheduleSave(); renderView(); toast('Đã cập nhật trạng thái'); }
+  }
+  if(e.target.id==='avatarFile'){
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    if(file.size > 1.5*1024*1024){ toast('Ảnh quá lớn, vui lòng chọn ảnh dưới 1.5MB'); e.target.value=''; return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      document.getElementById('avatarUrlField').value = dataUrl;
+      document.getElementById('avatarPreview').innerHTML = `<img src="${dataUrl}" alt="Ảnh đại diện">`;
+    };
+    reader.readAsDataURL(file);
   }
 }
 
