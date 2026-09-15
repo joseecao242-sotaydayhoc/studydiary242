@@ -6,8 +6,8 @@
 <title>Sổ Lớp — Quản lý lớp dạy kèm</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-const SUPABASE_URL = 'https://YOUR-PROJECT-REF.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 :root{
   --paper:#F2F7FC;
@@ -454,7 +454,14 @@ const CLASS_COLORS = ['#5B6FCF','#3F7A5C','#A6791E','#B3402A','#7C5CBF','#2E8B8B
 const WEEKDAY_SHORT = ['CN','T2','T3','T4','T5','T6','T7'];
 
 function addDays(d,n){ const r=new Date(d); r.setDate(r.getDate()+n); return r; }
-function isoDate(d){ return d.toISOString().slice(0,10); }
+function isoDate(d){
+  // Dùng giờ địa phương (không phải toISOString(), vì hàm đó quy đổi sang UTC
+  // và có thể làm lệch một ngày ở múi giờ Việt Nam UTC+7).
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 function fmtDate(iso){ const [y,m,d]=iso.split('-'); return `${d}/${m}`; }
 function fmtDateFull(iso){ const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; }
 function fmtMoney(n){ return (Number(n)||0).toLocaleString('vi-VN') + ' đ'; }
