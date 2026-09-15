@@ -6,8 +6,8 @@
 <title>Sổ Lớp — Quản lý lớp dạy kèm</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-const SUPABASE_URL = 'https://YOUR-PROJECT-REF.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 :root{
   --paper:#F2F7FC;
@@ -274,33 +274,80 @@ table.data-table tbody tr:last-child td{border-bottom:none;}
 .invoice-note{background:var(--panel-2);border-radius:8px;padding:12px 14px;font-size:12.5px;color:var(--ink-soft);margin-top:12px;}
 
 /* ---------- Fee card (ảnh phiếu học phí xuất ra) ---------- */
-.fee-card{width:520px;max-width:100%;background:linear-gradient(180deg,#EAF3FE 0%,#F7FBFF 60%);border:1px solid var(--line);border-radius:16px;padding:20px;margin:0 auto;font-family:'Inter',system-ui,sans-serif;}
-.fee-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;}
-.fee-card-top .gv{font-weight:700;font-size:13px;color:var(--rule-dark);}
-.fee-card-top .phone{font-size:11.5px;color:var(--ink-soft);}
-.fee-card-title-wrap{background:var(--rule);border-radius:14px;padding:16px 18px;text-align:center;color:#fff;margin:10px 0 16px 0;}
-.fee-card-title-wrap .kind{font-size:11px;letter-spacing:1.5px;opacity:.85;text-transform:uppercase;margin-bottom:2px;}
-.fee-card-title-wrap .title{font-family:'Lora',serif;font-size:22px;font-weight:700;line-height:1.2;}
-.fee-card-title-wrap .month{font-size:12.5px;opacity:.9;margin-top:4px;}
-.fee-card-section{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
-.fee-card-section .sec-title{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;color:var(--rule-dark);margin-bottom:10px;}
-.fee-card-row{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px dashed var(--line-soft);}
-.fee-card-row:last-child{border-bottom:none;}
-.fee-card-row .k{color:var(--ink-soft);}
-.fee-card-row .v{font-weight:600;color:var(--ink);text-align:right;}
-.fee-card-total{background:var(--ink);border-radius:12px;padding:14px 16px;text-align:center;color:#fff;margin-bottom:12px;}
-.fee-card-total .l{font-size:11.5px;opacity:.8;margin-bottom:2px;}
-.fee-card-total .v{font-family:'Lora',serif;font-size:24px;font-weight:700;}
-.fee-card-status{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:20px;margin-top:6px;}
-.fee-card-status.paid{background:rgba(46,196,120,.35);color:#fff;}
-.fee-card-status.unpaid{background:rgba(226,90,90,.35);color:#fff;}
-.fee-card-sessions{display:flex;flex-wrap:wrap;gap:6px;}
-.fee-card-sessions span{background:var(--rule-bg);color:var(--rule-dark);font-size:11px;padding:3px 8px;border-radius:6px;}
-.fee-card-pay{display:flex;gap:14px;align-items:center;}
-.fee-card-pay img{width:92px;height:92px;border-radius:8px;border:1px solid var(--line);flex-shrink:0;}
-.fee-card-pay .info{font-size:12px;line-height:1.7;color:var(--ink-soft);}
-.fee-card-pay .info b{color:var(--ink);}
-.fee-card-foot{text-align:center;font-size:12px;color:var(--rule-dark);font-style:italic;margin-top:4px;}
+.fee-card{
+  --fb:#8FC1F0; /* border blue */
+  width:560px;max-width:100%;
+  background-color:#EAF4FE;
+  background-image:
+    linear-gradient(rgba(28,111,217,.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(28,111,217,.07) 1px, transparent 1px);
+  background-size:16px 16px;
+  border:2.5px solid var(--fb);border-radius:24px;
+  padding:22px 20px 26px;margin:0 auto;
+  font-family:'Inter',system-ui,sans-serif;position:relative;overflow:hidden;
+}
+.fee-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;position:relative;z-index:2;}
+.fee-card-top .gv{font-weight:800;font-size:13.5px;color:var(--rule-dark);}
+.fee-card-top .phone{font-weight:800;font-size:13px;color:var(--rule-dark);}
+
+.fee-cloud{position:relative;margin:8px 2px 18px;padding:22px 26px;text-align:center;background:#DCEEFC;border:2.5px solid var(--fb);border-radius:38px 42px 40px 44px/54px 46px 58px 50px;}
+.fee-cloud h2{margin:0;font-family:'Lora',serif;font-weight:800;font-size:23px;line-height:1.32;color:var(--rule-dark);text-transform:uppercase;letter-spacing:.2px;}
+.fee-cloud .arrow{display:inline-block;color:var(--fb);font-weight:400;margin:0 6px;}
+.fee-cloud .doodle{position:absolute;color:var(--fb);}
+.fee-cloud .d1{top:8px;left:14px;}
+.fee-cloud .d2{top:12px;right:18px;}
+.fee-cloud .d3{bottom:10px;left:26px;}
+.fee-cloud .d4{bottom:14px;right:32px;}
+.fee-cloud .d5{color:var(--fb);top:-6px;right:-4px;}
+
+.fee-name-band{position:relative;background:#fff;border:2.5px solid var(--fb);border-radius:16px;padding:16px 20px;text-align:center;margin:0 2px 16px;}
+.fee-name-band .pill{display:inline-block;background:var(--rule-bg);color:var(--rule-dark);font-weight:800;font-size:11px;letter-spacing:1px;padding:4px 16px;border-radius:20px;margin-bottom:9px;}
+.fee-name-band .name-row{display:flex;align-items:center;justify-content:center;gap:10px;}
+.fee-name-band .name-row .heart{color:var(--rule-dark);flex-shrink:0;}
+.fee-name-band .name-row .swirl{color:var(--fb);flex-shrink:0;display:inline-flex;}
+.fee-name-band .name{font-family:'Lora',serif;font-weight:800;font-size:21px;color:var(--rule-dark);}
+.fee-name-band .sub{font-family:'Lora',serif;font-size:13px;font-weight:700;color:var(--rule-dark);margin-top:4px;}
+
+.fee-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 2px 12px;}
+.fee-box{background:#fff;border:2.5px solid var(--fb);border-radius:16px;padding:14px 16px;}
+.fee-box-title{display:flex;align-items:center;gap:8px;font-weight:800;font-size:12.5px;color:var(--rule-dark);margin-bottom:11px;letter-spacing:.2px;text-transform:uppercase;}
+.fee-box-title .ic{color:var(--rule-dark);flex-shrink:0;display:inline-flex;}
+.fee-row2{display:flex;align-items:flex-start;gap:9px;font-size:12.5px;padding:6px 0;border-bottom:1px dashed var(--line-soft);}
+.fee-row2:last-child{border-bottom:none;}
+.fee-row2 .ic{width:17px;flex-shrink:0;text-align:center;color:var(--rule-dark);display:inline-flex;justify-content:center;margin-top:1px;}
+.fee-row2 .k{color:var(--ink-soft);min-width:84px;flex-shrink:0;}
+.fee-row2 .v{font-weight:700;color:var(--ink);}
+.fee-sessions{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;font-size:11px;color:var(--ink-soft);margin:2px 0 7px 26px;}
+.fee-status-pill{display:inline-block;background:var(--rule-bg);color:var(--rule-dark);font-weight:700;font-size:11.5px;padding:3px 10px;border-radius:8px;}
+
+.fee-total-wrap{text-align:center;}
+.fee-total-wrap .fee-box-title{justify-content:center;}
+.fee-total-wrap .amt{font-family:'Lora',serif;font-weight:800;font-size:28px;color:var(--rule-dark);margin:2px 0;}
+.fee-total-wrap .extra{font-size:11.5px;color:var(--ink-faint);margin-bottom:10px;}
+.fee-qr{display:flex;flex-direction:column;align-items:center;gap:8px;}
+.fee-qr img{width:128px;height:128px;border-radius:8px;border:1px solid var(--line);}
+.fee-qr .badges{display:flex;gap:10px;align-items:center;font-size:13px;margin-top:2px;}
+.vqr-badge{color:var(--rule-dark);font-weight:800;}
+.vqr-badge b{color:#E0393E;}
+.napas-badge{background:#EAF2FB;color:var(--rule-dark);padding:2px 9px;border-radius:6px;font-weight:800;font-style:italic;}
+.napas-badge em{color:#E0393E;font-style:normal;}
+.fee-bank{font-size:11.5px;color:var(--ink-soft);line-height:1.8;text-align:left;width:100%;margin-top:4px;}
+.fee-bank b{color:var(--ink);}
+
+.txt{font-size:12.5px;color:var(--ink);line-height:1.6;}
+.fee-wide{position:relative;background:#fff;border:2.5px solid var(--fb);border-radius:16px;padding:13px 18px;display:flex;align-items:center;gap:16px;margin:0 2px 12px;}
+.fee-wide .lbl{display:flex;align-items:center;gap:8px;font-weight:800;font-size:12.5px;color:var(--rule-dark);flex-shrink:0;min-width:150px;text-transform:uppercase;}
+.fee-wide .lbl .ic{color:var(--rule-dark);display:inline-flex;}
+.fee-wide .div{width:1.5px;align-self:stretch;background:var(--line);}
+.fee-wide .meet-txt{display:flex;align-items:center;gap:8px;}
+
+.fee-foot-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 2px 14px;}
+
+.fee-banner{position:relative;background:var(--rule-bg);border-radius:20px;text-align:center;padding:11px;font-size:12.5px;font-weight:700;color:var(--rule-dark);margin:6px 2px 4px;}
+.fee-banner .heart{color:var(--rule-dark);vertical-align:-3px;margin:0 4px;}
+.fee-corner{position:absolute;z-index:1;}
+.fee-corner.bl{bottom:10px;left:10px;}
+.fee-corner.br{bottom:8px;right:10px;}
 
 /* ---------- Class mode tabs ---------- */
 .mode-tabs{display:flex;gap:6px;background:var(--panel-2);border-radius:9px;padding:4px;width:fit-content;}
@@ -411,6 +458,30 @@ function isoDate(d){ return d.toISOString().slice(0,10); }
 function fmtDate(iso){ const [y,m,d]=iso.split('-'); return `${d}/${m}`; }
 function fmtDateFull(iso){ const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; }
 function fmtMoney(n){ return (Number(n)||0).toLocaleString('vi-VN') + ' đ'; }
+
+/* ---- little SVG icon/doodle library for the fee card ---- */
+const FEE_ICONS = {
+  cap:`<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9 12 4l10 5-10 5-10-5Z"/><path d="M6 11.5v4.3c0 1.4 2.7 2.4 6 2.4s6-1 6-2.4v-4.3"/><path d="M21 9v6"/></svg>`,
+  person:`<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.3"/><path d="M5 20c0-3.6 3.1-6.1 7-6.1s7 2.5 7 6.1"/></svg>`,
+  book:`<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.6c-1.7-1.3-3.8-1.8-6.2-1.8v13.1c2.4 0 4.5.5 6.2 1.8 1.7-1.3 3.8-1.8 6.2-1.8V4.8c-2.4 0-4.5.5-6.2 1.8Z"/><path d="M12 6.6v13.1"/></svg>`,
+  coins:`<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6.8" rx="7" ry="2.8"/><path d="M5 6.8v4.2c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V6.8"/><path d="M5 11v4.2C5 16.7 8.1 18 12 18s7-1.3 7-2.8V11"/></svg>`,
+  wallet:`<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.6A2.6 2.6 0 0 1 5.6 5H18a2 2 0 0 1 2 2v1.2"/><path d="M3 7.6v8.8A2.6 2.6 0 0 0 5.6 19H19a2 2 0 0 0 2-2V9.6a2 2 0 0 0-2-2H5.6A2.6 2.6 0 0 1 3 7.6Z"/><circle cx="16.3" cy="13" r="1.2" fill="currentColor" stroke="none"/></svg>`,
+  people:`<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.2" r="3"/><path d="M3.3 20c0-3.3 2.7-5.5 5.7-5.5s5.7 2.2 5.7 5.5"/><circle cx="17.3" cy="9.2" r="2.3"/><path d="M15.6 14.4c2.5.4 4.2 2.3 4.2 5.1"/></svg>`,
+  calendar:`<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.4" y="5" width="17.2" height="15" rx="2.6"/><path d="M8 3v4M16 3v4M3.4 10h17.2"/></svg>`,
+  target:`<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg>`,
+  laptop:`<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="10.6" rx="1.4"/><path d="M2 19.4h20"/></svg>`,
+  heart:`<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="currentColor"><path d="M12 20.2s-7.2-4.5-9.7-8.8C.7 7.6 2.3 4.2 5.7 3.6c2-.4 3.8.5 4.5 2 0-.1 0-.1 0 0 .7-1.5 2.5-2.4 4.5-2 3.4.6 5 4 3.2 7.5-2.5 4.6-9.9 9.1-9.9 9.1Z"/></svg>`,
+  sparkle:`<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="currentColor"><path d="M12 2c.6 3.9 1.9 5.2 5.8 5.8-3.9.6-5.2 1.9-5.8 5.8-.6-3.9-1.9-5.2-5.8-5.8C10.1 7.2 11.4 5.9 12 2Z"/></svg>`,
+  plane:`<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 3 10.4l6.9 2.5 2.5 6.9L21 3Z"/><path d="M10.1 13.2 14 9.8"/></svg>`,
+  swirl:`<svg viewBox="0 0 44 16" width="{s}" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 8c6.5-9 13 9 20 0s13-9 20 0"/></svg>`,
+  meet:`<svg viewBox="0 0 24 24" width="{s}" height="{s}"><rect x="2" y="7" width="8.5" height="10" rx="1.3" fill="#00832D"/><path d="M10.5 9.3 15 6v12l-4.5-3.3z" fill="#0066DA"/><path d="M10.5 7 15 3.5v3.8z" fill="#E94235"/><path d="M20.5 8.3 15 12v-4.7l4-3.1a1 1 0 0 1 1.5.8z" fill="#2684FC"/><path d="M10.5 17l4.5-3.3v4.5a1 1 0 0 1-1 1h-2.6z" fill="#FFBA00"/></svg>`,
+  flower:`<svg viewBox="0 0 40 52" width="{s}" height="{h}" fill="none"><path d="M20 46V24" stroke="#1C6FD9" stroke-width="1.7" stroke-linecap="round"/><path d="M20 32c-4.5-2-6.5-6.4-4.3-10.6M20 32c4.5-2 6.5-6.4 4.3-10.6" stroke="#1C6FD9" stroke-width="1.7" stroke-linecap="round" fill="none"/><circle cx="20" cy="12" r="3.3" fill="#1C6FD9"/><circle cx="12.5" cy="15.5" r="3.3" fill="#BFE0FB"/><circle cx="27.5" cy="15.5" r="3.3" fill="#BFE0FB"/><circle cx="14.5" cy="7.5" r="3.3" fill="#BFE0FB"/><circle cx="25.5" cy="7.5" r="3.3" fill="#BFE0FB"/></svg>`,
+  panda:`<svg viewBox="0 0 64 64" width="{s}" height="{s}"><circle cx="32" cy="35" r="21" fill="#fff" stroke="#1C6FD9" stroke-width="1.5"/><circle cx="15" cy="17" r="8.5" fill="#22314f"/><circle cx="49" cy="17" r="8.5" fill="#22314f"/><ellipse cx="21" cy="33" rx="6.5" ry="8.5" fill="#22314f"/><ellipse cx="43" cy="33" rx="6.5" ry="8.5" fill="#22314f"/><circle cx="21" cy="34" r="2" fill="#fff"/><circle cx="43" cy="34" r="2" fill="#fff"/><ellipse cx="32" cy="42" rx="3.6" ry="2.6" fill="#22314f"/><path d="M28.5 45.5q3.5 2.6 7 0" stroke="#22314f" stroke-width="1.4" fill="none" stroke-linecap="round"/><g transform="translate(50 6)"><path d="M4 0c.4 2.6 1.2 3.4 3.8 3.8-2.6.4-3.4 1.2-3.8 3.8-.4-2.6-1.2-3.4-3.8-3.8C2.8 3.4 3.6 2.6 4 0Z" fill="#1C6FD9"/></g></svg>`,
+};
+function feeIcon(name, size=16, height){
+  const svg = FEE_ICONS[name] || '';
+  return svg.replace(/\{s\}/g, size).replace(/\{h\}/g, height||size);
+}
 function startOfWeek(d){ const r=new Date(d); const day=r.getDay(); const diff=(day===0?-6:1-day); r.setDate(r.getDate()+diff); r.setHours(0,0,0,0); return r; }
 function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
 function sameDay(a,b){ return a.toDateString()===b.toDateString(); }
@@ -1553,50 +1624,85 @@ function invoicePreviewHtml(inv){
   const mode = cl&&cl.mode==='online' ? 'online' : 'offline';
   const sessDates = cl ? state.sessions.filter(s=>s.classId===cl.id && monthKey(s.date)===inv.month).sort((a,b)=>a.date.localeCompare(b.date)) : [];
   const qrSrc = vietQrImage(settings.bankName, settings.bankAccount, total, `Hoc phi ${st?st.name:''} ${monthLabel(inv.month)}`.replace(/\s+/g,' ').trim(), (settings.teacherName||'').toUpperCase());
+  const statusText = inv.status==='paid' ? 'Đã hoàn tất học phí' : 'Chưa hoàn tất học phí';
+  const className = cl?escapeHtml(cl.name):'';
   return `
     <div id="feeCardCapture" class="fee-card">
       <div class="fee-card-top">
-        <div>
-          <div class="gv">GV. ${escapeHtml(settings.teacherName||'')}</div>
-          <div class="phone">SĐT: ${escapeHtml(settings.phone||'')}</div>
+        <div class="gv">GV. ${escapeHtml(settings.teacherName||'')}</div>
+        <div class="phone">SĐT: ${escapeHtml(settings.phone||'')}</div>
+      </div>
+
+      <div class="fee-cloud">
+        <span class="doodle d1">${feeIcon('sparkle',15)}</span>
+        <span class="doodle d2">${feeIcon('plane',20)}</span>
+        <span class="doodle d3">${feeIcon('heart',14)}</span>
+        <span class="doodle d4">${feeIcon('heart',12)}</span>
+        <span class="doodle d5">${feeIcon('sparkle',12)}</span>
+        <h2>Học phí khoá học${className?`<br><span class="arrow">&raquo;</span>${className}<span class="arrow">&laquo;</span>`:''}</h2>
+      </div>
+
+      <div class="fee-name-band">
+        <span class="pill">HỌ TÊN</span>
+        <div class="name-row">
+          <span class="swirl">${feeIcon('swirl',34)}</span>
+          <span class="heart">${feeIcon('heart',15)}</span>
+          <div class="name">${st?escapeHtml(st.name):''}</div>
+          <span class="heart">${feeIcon('heart',15)}</span>
+          <span class="swirl">${feeIcon('swirl',34)}</span>
         </div>
-        <span class="mode-pill ${mode}">${mode==='online'?'Online':'Offline'}</span>
+        <div class="sub">${monthLabel(inv.month)}</div>
       </div>
-      <div class="fee-card-title-wrap">
-        <div class="kind">Phiếu học phí</div>
-        <div class="title">${cl?escapeHtml(cl.name):''}</div>
-        <div class="month">${monthLabel(inv.month)}</div>
-      </div>
-      <div class="fee-card-section">
-        <div class="sec-title">Thông tin học sinh</div>
-        <div class="fee-card-row"><span class="k">Họ và tên</span><span class="v">${st?escapeHtml(st.name):''}</span></div>
-        <div class="fee-card-row"><span class="k">Lớp</span><span class="v">${cl?escapeHtml(cl.name):''}</span></div>
-        <div class="fee-card-row"><span class="k">Hình thức học</span><span class="v">${mode==='online'?'Online':'Offline'}</span></div>
-        <div class="fee-card-row"><span class="k">Học phí / buổi</span><span class="v">${fmtMoney(inv.feePerSession)}</span></div>
-        <div class="fee-card-row"><span class="k">Số buổi đã học</span><span class="v">${inv.sessions} buổi</span></div>
-        ${cl&&cl.courseSessions?`<div class="fee-card-row"><span class="k">Tổng số buổi khoá học</span><span class="v">${cl.courseSessions} buổi</span></div>`:''}
-        ${inv.extra?`<div class="fee-card-row"><span class="k">Phụ phí</span><span class="v">${fmtMoney(inv.extra)}</span></div>`:''}
-        ${sessDates.length?`<div style="margin-top:8px;"><div class="fee-card-sessions">${sessDates.map((s,i)=>`<span>Buổi ${i+1} (${s.date.slice(8,10)}/${s.date.slice(5,7)})</span>`).join('')}</div></div>`:''}
-      </div>
-      <div class="fee-card-total">
-        <div class="l">Tổng học phí</div>
-        <div class="v">${fmtMoney(total)}</div>
-        <div class="fee-card-status ${inv.status}">${inv.status==='paid'?'✓ Đã thu':'Chưa thu'}</div>
-      </div>
-      ${inv.note?`<div class="fee-card-section"><div class="sec-title">Nhận xét học tập</div><div style="font-size:12.5px;color:var(--ink-soft);line-height:1.6;">${escapeHtml(inv.note)}</div></div>`:''}
-      <div class="fee-card-section">
-        <div class="sec-title">Thông tin thanh toán</div>
-        <div class="fee-card-pay">
-          ${qrSrc?`<img src="${qrSrc}" alt="Mã QR chuyển khoản" crossorigin="anonymous">`:''}
-          <div class="info">
-            STK: <b class="mono">${escapeHtml(settings.bankAccount||'')}</b><br>
-            Ngân hàng: <b>${escapeHtml(settings.bankName||'')}</b><br>
-            Chủ TK: <b>${escapeHtml((settings.teacherName||'').toUpperCase())}</b>
+
+      <div class="fee-grid">
+        <div class="fee-box">
+          <div class="fee-box-title"><span class="ic">${feeIcon('cap',17)}</span>Thông tin học sinh</div>
+          <div class="fee-row2"><span class="ic">${feeIcon('person',15)}</span><span class="k">Lớp</span><span class="v">${className}</span></div>
+          <div class="fee-row2"><span class="ic">${feeIcon('book',15)}</span><span class="k">Học phí</span><span class="v">${fmtMoney(inv.feePerSession)}/ buổi</span></div>
+          <div class="fee-row2"><span class="ic">${feeIcon('coins',15)}</span><span class="k">Số buổi đã học</span><span class="v">${inv.sessions} buổi</span></div>
+          ${sessDates.length?`<div class="fee-sessions">${sessDates.map((s,i)=>`<span>• Buổi ${i+1} (${s.date.slice(8,10)}/${s.date.slice(5,7)})</span>`).join('')}</div>`:''}
+          <div class="fee-row2"><span class="ic">${feeIcon('wallet',15)}</span><span class="k">Tình trạng lớp</span><span class="v"><span class="fee-status-pill">${statusText}</span></span></div>
+          ${cl&&cl.courseSessions?`<div class="fee-row2"><span class="ic">${feeIcon('people',15)}</span><span class="k">Số buổi</span><span class="v">${cl.courseSessions} buổi</span></div>`:''}
+          ${cl&&cl.schedule?`<div class="fee-row2"><span class="ic">${feeIcon('calendar',15)}</span><span class="k">Lịch học</span><span class="v">${escapeHtml(cl.schedule)}</span></div>`:''}
+        </div>
+
+        <div class="fee-box fee-total-wrap">
+          <div class="fee-box-title"><span class="ic">${feeIcon('wallet',17)}</span>Tổng học phí</div>
+          <div class="amt">${fmtMoney(total)}</div>
+          ${inv.extra?`<div class="extra">(Phụ phí: ${fmtMoney(inv.extra)})</div>`:''}
+          <div class="fee-qr">
+            ${qrSrc?`<img src="${qrSrc}" alt="Mã QR chuyển khoản" crossorigin="anonymous">`:''}
+            <div class="badges"><span class="vqr-badge">Viet<b>QR</b></span><span class="napas-badge">napas <em>247</em></span></div>
+            <div class="fee-bank">
+              Ngân hàng: <b>${escapeHtml(settings.bankName||'')}</b><br>
+              Số TK: <b class="mono">${escapeHtml(settings.bankAccount||'')}</b><br>
+              Chủ TK: <b>${escapeHtml((settings.teacherName||'').toUpperCase())}</b>
+            </div>
           </div>
+          ${!qrSrc?`<div style="font-size:11px;color:var(--ink-faint);margin-top:8px;">Chưa nhận diện được ngân hàng để tạo mã QR — vào Cài đặt kiểm tra lại tên ngân hàng.</div>`:''}
         </div>
-        ${!qrSrc?`<div style="font-size:11.5px;color:var(--ink-faint);margin-top:8px;">Chưa nhận diện được ngân hàng để tạo mã QR — vào Cài đặt kiểm tra lại tên ngân hàng (vd: MB Bank, Vietcombank, Techcombank...).</div>`:''}
       </div>
-      <div class="fee-card-foot">Cảm ơn quý phụ huynh và chúc con học tốt! ♥</div>
+
+      ${inv.note?`<div class="fee-wide"><div class="lbl"><span class="ic">${feeIcon('target',16)}</span>Nhận xét học tập</div><div class="div"></div><div class="txt">${escapeHtml(inv.note)} ${feeIcon('heart',13)}</div></div>`:''}
+
+      <div class="fee-wide"><div class="lbl"><span class="ic">${feeIcon('laptop',16)}</span>Hình thức học</div><div class="div"></div><div class="meet-txt txt">${mode==='online'?`${feeIcon('meet',20)} Online qua Google Meeting`:'Offline tại lớp học'}</div></div>
+
+      <div class="fee-foot-grid">
+        <div class="fee-box">
+          <div class="fee-box-title"><span class="ic">${feeIcon('calendar',17)}</span>Lịch học</div>
+          <div class="txt">${cl&&cl.schedule?escapeHtml(cl.schedule):'—'}</div>
+        </div>
+        <div class="fee-box">
+          <div class="fee-box-title"><span class="ic">${feeIcon('book',17)}</span>Thông tin lớp học</div>
+          <div class="fee-row2"><span class="k">Khoá học</span><span class="v">${className}</span></div>
+          <div class="fee-row2"><span class="k">Giáo viên</span><span class="v">${escapeHtml(settings.teacherName||'')}</span></div>
+          ${cl&&cl.courseSessions?`<div class="fee-row2"><span class="k">Số buổi</span><span class="v">${cl.courseSessions} buổi</span></div>`:''}
+        </div>
+      </div>
+
+      <div class="fee-banner"><span class="heart">${feeIcon('heart',13)}</span> Chúc bạn học tốt và đạt được mục tiêu${className?` ${className}`:''} nhé! <span class="heart">${feeIcon('heart',13)}</span></div>
+      <span class="fee-corner bl">${feeIcon('flower',30,38)}</span>
+      <span class="fee-corner br">${feeIcon('panda',52)}</span>
     </div>
     <div class="row gap8 no-print" style="margin-top:16px;justify-content:flex-end;">
       <button class="btn btn-secondary" data-action="modal-close">Đóng</button>
