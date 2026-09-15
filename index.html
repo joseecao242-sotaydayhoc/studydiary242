@@ -907,7 +907,10 @@ const VIETQR_BANKS = [
 ];
 function bankBin(bankName){
   const n = (bankName||'').toLowerCase();
-  const found = VIETQR_BANKS.find(([kw])=>n.includes(kw));
+  // Ưu tiên khớp từ khoá DÀI hơn trước, để tránh nhận nhầm các từ khoá ngắn (vd 'mb')
+  // vốn tình cờ nằm lọt bên trong tên ngân hàng khác (vd 'vietcoMBank' chứa 'mb').
+  const sorted = [...VIETQR_BANKS].sort((a,b)=>b[0].length-a[0].length);
+  const found = sorted.find(([kw])=>n.includes(kw));
   return found? found[1] : null;
 }
 function vietQrImage(bankName, account, amount, addInfo, accountName){
