@@ -578,8 +578,9 @@ function seedData(){
   const settings = {
     teacherName:'Nguyễn Trang Anh',
     phone:'0978654345',
-    bankAccount:'0978654345',
-    bankName:'MB Bank',
+    bankAccount:'0385569139',
+    bankName:'Vietcombank',
+    bankAccountName:'CAO THI PHUONG THU',
     subjectDefault:'Toán',
     address:'',
     note:'',
@@ -1623,9 +1624,10 @@ function invoicePreviewHtml(inv){
   const settings = state.settings;
   const mode = cl&&cl.mode==='online' ? 'online' : 'offline';
   const sessDates = cl ? state.sessions.filter(s=>s.classId===cl.id && monthKey(s.date)===inv.month).sort((a,b)=>a.date.localeCompare(b.date)) : [];
-  const qrSrc = vietQrImage(settings.bankName, settings.bankAccount, total, `Hoc phi ${st?st.name:''} ${monthLabel(inv.month)}`.replace(/\s+/g,' ').trim(), (settings.teacherName||'').toUpperCase());
+  const qrSrc = vietQrImage(settings.bankName, settings.bankAccount, total, `Hoc phi ${st?st.name:''} ${monthLabel(inv.month)}`.replace(/\s+/g,' ').trim(), ((settings.bankAccountName||settings.teacherName||'')).toUpperCase());
   const statusText = inv.status==='paid' ? 'Đã hoàn tất học phí' : 'Chưa hoàn tất học phí';
   const className = cl?escapeHtml(cl.name):'';
+  const accountHolder = (settings.bankAccountName||settings.teacherName||'').toUpperCase();
   return `
     <div id="feeCardCapture" class="fee-card">
       <div class="fee-card-top">
@@ -1676,7 +1678,7 @@ function invoicePreviewHtml(inv){
             <div class="fee-bank">
               Ngân hàng: <b>${escapeHtml(settings.bankName||'')}</b><br>
               Số TK: <b class="mono">${escapeHtml(settings.bankAccount||'')}</b><br>
-              Chủ TK: <b>${escapeHtml((settings.teacherName||'').toUpperCase())}</b>
+              Chủ TK: <b>${escapeHtml(accountHolder)}</b>
             </div>
           </div>
           ${!qrSrc?`<div style="font-size:11px;color:var(--ink-faint);margin-top:8px;">Chưa nhận diện được ngân hàng để tạo mã QR — vào Cài đặt kiểm tra lại tên ngân hàng.</div>`:''}
@@ -1881,6 +1883,11 @@ function renderSettings(){
         <div class="field-row">
           <div class="field"><label>Số tài khoản nhận học phí</label><input name="bankAccount" value="${escapeHtml(s.bankAccount)}"></div>
           <div class="field"><label>Ngân hàng</label><input name="bankName" value="${escapeHtml(s.bankName)}"></div>
+        </div>
+        <div class="field">
+          <label>Tên chủ tài khoản (đúng như đăng ký ngân hàng)</label>
+          <input name="bankAccountName" value="${escapeHtml(s.bankAccountName||'')}" placeholder="VD: CAO THI PHUONG THU">
+          <div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px;">Mã VietQR luôn hiển thị đúng tên thật đã đăng ký với ngân hàng cho số tài khoản này — hãy nhập đúng tên đó (có dấu hoặc không dấu) để phiếu học phí khớp với mã QR. Nếu để trống, hệ thống sẽ tạm dùng Họ và tên ở trên.</div>
         </div>
         <div class="field"><label>Địa chỉ</label><input name="address" value="${escapeHtml(s.address||'')}"></div>
         <div class="field"><label>Ghi chú</label><textarea name="note">${escapeHtml(s.note||'')}</textarea></div>
