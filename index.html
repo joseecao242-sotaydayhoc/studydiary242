@@ -1636,18 +1636,14 @@ function landingRoleAvatar(letters){
   return `<div class="landing-role-avatar">${letters}</div>`;
 }
 function renderHome(){
+  // Trang chủ hiển thị TRƯỚC khi đăng nhập nên không đọc dữ liệu thật (state có thể
+  // chưa được tải vì app_state giờ yêu cầu đăng nhập). Dùng số liệu minh hoạ cố định.
   const mKey = currentMonthKey();
-  const sessionsThisMonth = state.sessions.filter(s=>monthKey(s.date)===mKey);
-  const revenueThisMonth = sessionsThisMonth.reduce((sum,s)=>{
-    const cl = classById(s.classId);
-    return sum + (cl? cl.fee * studentsOfClass(cl.id).length : 0);
-  },0);
-  const activeStudents = state.students.filter(s=>s.status==='active').length;
-  const now = new Date();
-  const upcoming = state.sessions
-    .filter(s=> new Date(s.date+'T'+s.startTime) >= new Date(now.getFullYear(),now.getMonth(),now.getDate()))
-    .sort((a,b)=> (a.date+a.startTime).localeCompare(b.date+b.startTime))
-    .slice(0,3);
+  const demoUpcoming = [
+    {time:'08:00', name:'Toán 9', mins:90},
+    {time:'14:30', name:'Toán 7', mins:120},
+    {time:'18:00', name:'Lớp 1-1', mins:90},
+  ];
 
   return `
   <div class="landing">
@@ -1670,7 +1666,7 @@ function renderHome(){
       </div>
     </section>
 
-    <!-- ============ DASHBOARD PREVIEW ============ -->
+    <!-- ============ DASHBOARD PREVIEW (minh hoạ) ============ -->
     <section class="landing-section" style="padding-top:36px;">
       <div class="landing-preview-window">
         <div class="landing-preview-topbar">
@@ -1693,17 +1689,14 @@ function renderHome(){
             </div>
             <div class="landing-preview-desc">Theo dõi lịch dạy, học sinh và học phí trong một nơi.</div>
             <div class="landing-mini-stat-grid">
-              <div class="landing-mini-stat"><div class="l">Lớp đang dạy</div><div class="v">${String(state.classes.length).padStart(2,'0')}</div><div class="u">Đang hoạt động</div></div>
-              <div class="landing-mini-stat"><div class="l">Học sinh</div><div class="v">${activeStudents}</div><div class="u">Trong các lớp</div></div>
-              <div class="landing-mini-stat"><div class="l">Buổi học</div><div class="v">${sessionsThisMonth.length}</div><div class="u">Trong tháng</div></div>
-              <div class="landing-mini-stat"><div class="l">Học phí</div><div class="v">${(revenueThisMonth/1000000).toFixed(1)}tr</div><div class="u">Đã đối soát</div></div>
+              <div class="landing-mini-stat"><div class="l">Lớp đang dạy</div><div class="v">08</div><div class="u">Đang hoạt động</div></div>
+              <div class="landing-mini-stat"><div class="l">Học sinh</div><div class="v">42</div><div class="u">Trong các lớp</div></div>
+              <div class="landing-mini-stat"><div class="l">Buổi học</div><div class="v">86</div><div class="u">Trong tháng</div></div>
+              <div class="landing-mini-stat"><div class="l">Học phí</div><div class="v">12.8tr</div><div class="u">Đã đối soát</div></div>
             </div>
             <div class="landing-upcoming">
-              <div class="landing-upcoming-head"><span>Lịch dạy sắp tới</span><span>${fmtDateFull(isoDate(now)).slice(0,5)}</span></div>
-              ${upcoming.length ? upcoming.map(s=>{
-                const cl = classById(s.classId);
-                return `<div class="landing-upcoming-row"><span>${s.startTime} · ${cl?escapeHtml(cl.name):'—'}</span><span style="color:var(--ink-faint);">${(()=>{const [sh,sm]=s.startTime.split(':').map(Number);const [eh,em]=s.endTime.split(':').map(Number);return ((eh*60+em)-(sh*60+sm));})()} phút</span></div>`;
-              }).join('') : `<div class="landing-upcoming-row"><span style="color:var(--ink-faint);">Chưa có buổi học sắp tới</span></div>`}
+              <div class="landing-upcoming-head"><span>Lịch dạy sắp tới</span></div>
+              ${demoUpcoming.map(s=>`<div class="landing-upcoming-row"><span>${s.time} · ${escapeHtml(s.name)}</span><span style="color:var(--ink-faint);">${s.mins} phút</span></div>`).join('')}
             </div>
           </div>
         </div>
