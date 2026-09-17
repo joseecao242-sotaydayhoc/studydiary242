@@ -826,7 +826,7 @@ function seedData(){
     avatarUrl:''
   };
 
-  return {classes, students, assistants, sessions, studyLogs, grades, invoices, payments, requests, feedback, settings};
+  return {classes, students, sessions, studyLogs, grades, invoices, payments, requests, feedback, settings};
 }
 
 /* Thông tin ngân hàng chuẩn hiện tại của giáo viên. Nếu dữ liệu đã lưu (localStorage/Supabase)
@@ -939,7 +939,11 @@ function openModal(title, bodyHtml, onSubmit, wide){
         else if(!Array.isArray(data[name])) data[name]=[data[name]];
       });
       const result = modalSubmitHandler ? modalSubmitHandler(data) : undefined;
-      if(result!==false) closeModal();
+      if(result && typeof result.then === 'function'){
+        result.then(r=>{ if(r!==false) closeModal(); }).catch(err=>{ console.error(err); toast('Có lỗi xảy ra, thử lại'); });
+      } else if(result!==false){
+        closeModal();
+      }
     });
   }
 }
@@ -1192,8 +1196,8 @@ function currentMonthKey(){ return monthKey(isoDate(new Date())); }
 /* =========================================================
    XÁC THỰC & PHÂN QUYỀN THEO VAI TRÒ
    ========================================================= */
-const SESSION_KEY = 'so-lop-session-v1';
-let currentUser = null; // {role, username, name, assistantId?, assignedClassIds?}
+const SESSION_KEY = 'so-lop-session-v1'; // không còn dùng — Supabase Auth tự quản lý phiên đăng nhập
+let currentUser = null; // {id, email, name, role, assignedClassIds}
 
 const ROLE_LABEL = {admin:'Quản trị viên', teacher:'Giáo viên', assistant:'Trợ giảng'};
 const ROLE_NAV = {
@@ -1205,7 +1209,7 @@ const ROLE_NAV = {
 const ASSISTANT_DENIED_ACTIONS = new Set([
   'open-add-class','edit-class','delete-class',
   'open-add-student','edit-student','delete-student',
-  'open-add-assistant','edit-assistant','delete-assistant',
+  'edit-assistant','delete-assistant',
   'delete-session',
   'open-add-invoice','view-invoice','view-student-fee','mark-paid','delete-invoice',
   'open-add-payment','delete-payment',
@@ -1263,52 +1267,69 @@ function scopedGrades(){
   return state.grades;
 }
 
-/* Khởi tạo tài khoản mặc định (Admin, Giáo viên) và đảm bảo mỗi Trợ giảng có tài khoản đăng nhập */
-function ensureAuthSeed(){
-  let changed = false;
-  if(!state.users || !state.users.length){
-    state.users = [
-      {id:uid(), username:'josee', password:'JoseeCao@242', role:'admin', name:'Quản trị viên'},
-      {id:uid(), username:'giaovien', password:'giaovien123', role:'teacher', name: (state.settings&&state.settings.teacherName)||'Giáo viên'},
-    ];
-    changed = true;
-  }
-  (state.assistants||[]).forEach((a,i)=>{
-    if(!a.username){ a.username = 'tg'+(i+1); changed = true; }
-    if(!a.password){ a.password = '123456'; changed = true; }
-  });
-  /* Nâng cấp tài khoản admin mặc định cũ (admin/admin123) sang tài khoản mới nếu chưa đổi */
-  const oldAdmin = (state.users||[]).find(u=>u.role==='admin' && u.username==='admin' && u.password==='admin123');
-  if(oldAdmin){ oldAdmin.username='josee'; oldAdmin.password='JoseeCao@242'; changed = true; }
-  return changed;
-}
+/* =========================================================
+   ĐĂNG NHẬP THẬT QUA SUPABASE AUTH
+   Vai trò + lớp phụ trách được lưu ở bảng "profiles" (RLS thật trên
+   Supabase — xem file supabase-phan-quyen.sql). Không còn mật khẩu
+   tự chế lưu trong JSON như trước.
+   ========================================================= */
+let profilesCache = []; // danh sách hồ sơ (admin/giáo viên xem được, dùng cho trang Trợ giảng & Cài đặt)
 
-function findAccount(username, password){
-  const u = (username||'').trim().toLowerCase();
-  const acc = (state.users||[]).find(x=>x.username.toLowerCase()===u && x.password===password);
-  if(acc) return {role:acc.role, username:acc.username, name:acc.name};
-  const a = (state.assistants||[]).find(x=>(x.username||'').toLowerCase()===u && x.password===password);
-  if(a) return {role:'assistant', username:a.username, name:a.name, assistantId:a.id, assignedClassIds:a.assignedClassIds||[]};
-  return null;
+function profileToCurrentUser(profile, authUser){
+  return {
+    id: profile.id,
+    email: profile.email || (authUser&&authUser.email) || '',
+    name: profile.name || (authUser&&authUser.email) || 'Người dùng',
+    role: profile.role || 'assistant',
+    assignedClassIds: profile.assigned_class_ids || [],
+    phone: profile.phone || '',
+    note: profile.note || '',
+  };
 }
-function accountByUsername(username){
-  const u = (username||'').toLowerCase();
-  const acc = (state.users||[]).find(x=>x.username.toLowerCase()===u);
-  if(acc) return {role:acc.role, username:acc.username, name:acc.name};
-  const a = (state.assistants||[]).find(x=>(x.username||'').toLowerCase()===u);
-  if(a) return {role:'assistant', username:a.username, name:a.name, assistantId:a.id, assignedClassIds:a.assignedClassIds||[]};
-  return null;
+async function fetchMyProfile(userId){
+  const { data, error } = await sb.from('profiles').select('*').eq('id', userId).maybeSingle();
+  if(error){ console.error('Lỗi tải hồ sơ:', error); return null; }
+  return data;
 }
-
-function saveSession(){ try{ localStorage.setItem(SESSION_KEY, JSON.stringify({username:currentUser.username})); }catch(e){} }
-function clearSession(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} }
-function restoreSession(){
+async function fetchAllProfiles(){
+  if(!SUPABASE_ENABLED || !canManage()) { profilesCache = []; return profilesCache; }
+  const { data, error } = await sb.from('profiles').select('*').order('created_at', {ascending:true});
+  if(error){ console.error('Lỗi tải danh sách tài khoản:', error); profilesCache = []; return profilesCache; }
+  profilesCache = data||[];
+  return profilesCache;
+}
+async function restoreSupabaseSession(){
+  if(!SUPABASE_ENABLED) return null;
   try{
-    const raw = localStorage.getItem(SESSION_KEY);
-    if(!raw) return null;
-    const {username} = JSON.parse(raw);
-    return accountByUsername(username);
-  }catch(e){ return null; }
+    const { data:{session} } = await sb.auth.getSession();
+    if(!session) return null;
+    const profile = await fetchMyProfile(session.user.id);
+    if(!profile) return null;
+    return profileToCurrentUser(profile, session.user);
+  }catch(e){ console.error('Lỗi khôi phục phiên đăng nhập:', e); return null; }
+}
+async function signInWithEmail(email, password){
+  const { data, error } = await sb.auth.signInWithPassword({ email: (email||'').trim(), password });
+  if(error) return { error };
+  const profile = await fetchMyProfile(data.user.id);
+  if(!profile) return { error: {message:'Không tìm thấy hồ sơ vai trò cho tài khoản này'} };
+  return { user: profileToCurrentUser(profile, data.user) };
+}
+async function signUpWithEmail(email, password, name){
+  const { data, error } = await sb.auth.signUp({
+    email: (email||'').trim(), password,
+    options: { data: { name: (name||'').trim() } }
+  });
+  if(error) return { error };
+  if(!data.session){
+    return { needsConfirm: true };
+  }
+  const profile = await fetchMyProfile(data.user.id);
+  if(!profile) return { error: {message:'Không tạo được hồ sơ vai trò, thử tải lại trang'} };
+  return { user: profileToCurrentUser(profile, data.user) };
+}
+async function signOutUser(){
+  if(SUPABASE_ENABLED){ try{ await sb.auth.signOut(); }catch(e){} }
 }
 
 function defaultViewForRole(role){ return (ROLE_NAV[role]||['overview'])[0]; }
@@ -1525,27 +1546,47 @@ function exportFullDataExcel(){
   ], `so-lop-du-lieu-${isoDate(new Date())}.xlsx`);
 }
 
-function loginFormHtml(){
+function loginFormHtml(mode){
+  const isSignup = mode==='signup';
   return `<form id="modalForm">
-    <div class="field"><label>Tên đăng nhập</label><input name="username" autocomplete="username" required autofocus></div>
-    <div class="field"><label>Mật khẩu</label><input type="password" name="password" autocomplete="current-password" required></div>
-    <div class="hint" style="margin:-6px 0 14px 0;line-height:1.65;">Tài khoản demo: <b>josee / JoseeCao@242</b> (Quản trị viên) · <b>giaovien / giaovien123</b> (Giáo viên). Tài khoản Trợ giảng do Quản trị viên / Giáo viên tạo trong mục "Trợ giảng".</div>
+    ${isSignup?`<div class="field"><label>Họ và tên</label><input name="name" required autofocus></div>`:''}
+    <div class="field"><label>Email</label><input type="email" name="email" autocomplete="username" required ${isSignup?'':'autofocus'}></div>
+    <div class="field"><label>Mật khẩu</label><input type="password" name="password" autocomplete="${isSignup?'new-password':'current-password'}" required minlength="6"></div>
+    ${isSignup?`<div class="hint" style="margin:-6px 0 14px 0;">Tài khoản mới sẽ có vai trò <b>Trợ giảng</b> mặc định — Quản trị viên/Giáo viên sẽ vào mục "Trợ giảng" để gán lớp phụ trách và nâng quyền nếu cần.</div>`:''}
+    <div class="row" style="justify-content:flex-start;margin-bottom:14px;">
+      <button type="button" class="btn-link" data-action="${isSignup?'show-login':'show-signup'}" style="background:none;border:none;color:var(--rule);font-size:13px;cursor:pointer;padding:0;">${isSignup?'Đã có tài khoản? Đăng nhập':'Chưa có tài khoản? Đăng ký (Trợ giảng)'}</button>
+    </div>
     <div class="modal-foot" style="padding:0;margin-top:6px;">
       <div style="flex:1;"></div>
       <button type="button" class="btn btn-secondary" data-action="modal-close">Huỷ</button>
-      <button type="submit" class="btn btn-primary">Đăng nhập</button>
+      <button type="submit" class="btn btn-primary">${isSignup?'Đăng ký':'Đăng nhập'}</button>
     </div>
   </form>`;
 }
-function openLoginModal(){
-  openModal('Đăng nhập hệ thống', loginFormHtml(), (data)=>{
-    const acc = findAccount(data.username, data.password);
-    if(!acc){ toast('Sai tên đăng nhập hoặc mật khẩu'); return false; }
-    currentUser = acc;
-    saveSession();
-    enterApp();
-    toast(`Xin chào ${acc.name}`);
-    return true;
+function openLoginModal(mode){
+  if(!SUPABASE_ENABLED){ toast('Chưa cấu hình Supabase — không thể đăng nhập'); return; }
+  const isSignup = mode==='signup';
+  openModal(isSignup?'Đăng ký tài khoản':'Đăng nhập hệ thống', loginFormHtml(mode), async (data)=>{
+    if(isSignup){
+      const res = await signUpWithEmail(data.email, data.password, data.name);
+      if(res.error){ toast(res.error.message || 'Không thể đăng ký'); return false; }
+      if(res.needsConfirm){ toast('Đã gửi email xác nhận — hãy kiểm tra hộp thư rồi đăng nhập lại'); openLoginModal('login'); return false; }
+      currentUser = res.user;
+      await loadState();
+      if(canManage()) await fetchAllProfiles();
+      enterApp();
+      toast(`Xin chào ${currentUser.name}`);
+      return true;
+    } else {
+      const res = await signInWithEmail(data.email, data.password);
+      if(res.error){ toast(res.error.message==='Invalid login credentials' ? 'Sai email hoặc mật khẩu' : (res.error.message||'Không thể đăng nhập')); return false; }
+      currentUser = res.user;
+      await loadState();
+      if(canManage()) await fetchAllProfiles();
+      enterApp();
+      toast(`Xin chào ${currentUser.name}`);
+      return true;
+    }
   });
 }
 function enterApp(){
@@ -1554,9 +1595,9 @@ function enterApp(){
   renderSidebar();
   navigate(defaultViewForRole(currentUser.role));
 }
-function exitApp(){
+async function exitApp(){
+  await signOutUser();
   currentUser = null;
-  clearSession();
   closeModal();
   document.getElementById('app').classList.add('hidden');
   document.getElementById('authScreen').classList.remove('hidden');
@@ -1569,7 +1610,14 @@ function attachAuthDelegation(){
   document.getElementById('authScreen').addEventListener('click', (e)=>{
     const t = e.target.closest('[data-action]');
     if(!t) return;
-    if(t.getAttribute('data-action')==='open-login') openLoginModal();
+    if(t.getAttribute('data-action')==='open-login') openLoginModal('login');
+  });
+  document.getElementById('modal-root').addEventListener('click', (e)=>{
+    const t = e.target.closest('[data-action]');
+    if(!t) return;
+    const action = t.getAttribute('data-action');
+    if(action==='show-signup') openLoginModal('signup');
+    if(action==='show-login') openLoginModal('login');
   });
 }
 
@@ -2242,58 +2290,61 @@ function studentFormHtml(existing){
    ASSISTANTS
    ========================================================= */
 function renderAssistants(){
-  const rows = state.assistants.map(a=>{
-    const classNames = a.assignedClassIds.map(id=>classById(id)).filter(Boolean);
+  const rows = profilesCache.map(a=>{
+    const classNames = (a.assigned_class_ids||[]).map(id=>classById(id)).filter(Boolean);
     return `<tr>
-      <td><b>${escapeHtml(a.name)}</b></td>
-      <td>${escapeHtml(a.phone)}<div style="font-size:11.5px;color:var(--ink-faint);">${escapeHtml(a.email||'')}</div></td>
+      <td><b>${escapeHtml(a.name||a.email)}</b></td>
+      <td>${escapeHtml(a.phone||'')}<div style="font-size:11.5px;color:var(--ink-faint);">${escapeHtml(a.email||'')}</div></td>
+      <td><span class="role-tag">${ROLE_LABEL[a.role]||a.role}</span></td>
       <td>${classNames.length? classNames.map(c=>`<span class="tag-pill" style="background:${c.color}22;color:${c.color};margin-right:4px;">${escapeHtml(c.name)}</span>`).join('') : '—'}</td>
       <td>
         <div class="row gap8">
           <button class="icon-btn" data-action="edit-assistant" data-id="${a.id}" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
-          <button class="icon-btn del" data-action="delete-assistant" data-id="${a.id}" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m-9 0v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6"/></svg></button>
+          ${isAdmin()?`<button class="icon-btn del" data-action="delete-assistant" data-id="${a.id}" title="Xoá hồ sơ (thu hồi quyền truy cập)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m-9 0v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6"/></svg></button>`:''}
         </div>
       </td>
     </tr>`;
   }).join('');
   return `
     <div class="row between mb16">
-      <div class="panel-sub" style="font-size:13px;">${state.assistants.length} trợ giảng</div>
-      <button class="btn btn-primary" data-action="open-add-assistant">+ Thêm trợ giảng</button>
+      <div class="panel-sub" style="font-size:13px;">${profilesCache.length} tài khoản (Giáo viên/Trợ giảng)</div>
     </div>
+    <div class="hint" style="margin:0 0 14px 0;">Trợ giảng tự đăng ký tài khoản ở màn hình đăng nhập (nút "Chưa có tài khoản? Đăng ký") — sau đó sẽ xuất hiện ở đây để bạn gán lớp phụ trách${isAdmin()?' và nâng quyền nếu cần':''}.</div>
     <div class="panel">
       <table class="data-table">
-        <thead><tr><th>Họ tên</th><th>Liên hệ</th><th>Lớp phụ trách</th><th></th></tr></thead>
-        <tbody>${rows || '<tr class="empty-row"><td colspan="4">Chưa có trợ giảng nào</td></tr>'}</tbody>
+        <thead><tr><th>Họ tên</th><th>Liên hệ</th><th>Vai trò</th><th>Lớp phụ trách</th><th></th></tr></thead>
+        <tbody>${rows || '<tr class="empty-row"><td colspan="5">Chưa có tài khoản nào đăng ký</td></tr>'}</tbody>
       </table>
     </div>
   `;
 }
 
 function assistantFormHtml(existing){
-  const assigned = existing? existing.assignedClassIds : [];
+  const assigned = existing? (existing.assigned_class_ids||[]) : [];
   return `<form id="modalForm">
-    <div class="field"><label>Họ và tên</label><input name="name" value="${existing?escapeHtml(existing.name):''}" required></div>
+    <div class="field"><label>Họ và tên</label><input name="name" value="${existing?escapeHtml(existing.name||''):''}" required></div>
     <div class="field-row">
-      <div class="field"><label>Số điện thoại</label><input name="phone" value="${existing?escapeHtml(existing.phone):''}"></div>
-      <div class="field"><label>Email</label><input name="email" value="${existing?escapeHtml(existing.email||''):''}"></div>
+      <div class="field"><label>Số điện thoại</label><input name="phone" value="${existing?escapeHtml(existing.phone||''):''}"></div>
+      <div class="field"><label>Email đăng nhập</label><input value="${existing?escapeHtml(existing.email||''):''}" disabled></div>
     </div>
-    <div class="field-row">
-      <div class="field"><label>Tên đăng nhập</label><input name="username" value="${existing?escapeHtml(existing.username||''):''}" placeholder="VD: tg3" autocomplete="off"></div>
-      <div class="field"><label>Mật khẩu ${existing?'(để trống nếu giữ nguyên)':''}</label><input type="text" name="password" placeholder="${existing?'••••••':'VD: 123456'}" autocomplete="off"></div>
-    </div>
-    <div class="hint" style="margin:-8px 0 14px 0;">Tài khoản này để trợ giảng đăng nhập hệ thống — nếu để trống, hệ thống sẽ tự tạo tên đăng nhập và mật khẩu mặc định.</div>
+    ${isAdmin()?`<div class="field"><label>Vai trò</label>
+      <select name="role">
+        <option value="assistant" ${existing&&existing.role==='assistant'?'selected':''}>Trợ giảng</option>
+        <option value="teacher" ${existing&&existing.role==='teacher'?'selected':''}>Giáo viên</option>
+        <option value="admin" ${existing&&existing.role==='admin'?'selected':''}>Quản trị viên</option>
+      </select>
+    </div>`:''}
     <div class="field"><label>Lớp phụ trách</label>
       <div class="check-grid" data-multi="assignedClassIds">
-        ${scopedClasses().map(c=>`<label class="check-chip"><input type="checkbox" name="assignedClassIds" value="${c.id}" ${assigned.includes(c.id)?'checked':''}><span>${escapeHtml(c.name)}</span></label>`).join('')}
+        ${state.classes.map(c=>`<label class="check-chip"><input type="checkbox" name="assignedClassIds" value="${c.id}" ${assigned.includes(c.id)?'checked':''}><span>${escapeHtml(c.name)}</span></label>`).join('')}
       </div>
     </div>
     <div class="field"><label>Ghi chú</label><textarea name="note">${existing?escapeHtml(existing.note||''):''}</textarea></div>
     <div class="modal-foot" style="padding:0;margin-top:6px;">
-      ${existing?`<button type="button" class="btn btn-danger" data-action="delete-assistant" data-id="${existing.id}">Xoá trợ giảng</button>`:''}
+      ${(existing&&isAdmin())?`<button type="button" class="btn btn-danger" data-action="delete-assistant" data-id="${existing.id}">Xoá hồ sơ</button>`:''}
       <div style="flex:1;"></div>
       <button type="button" class="btn btn-secondary" data-action="modal-close">Huỷ</button>
-      <button type="submit" class="btn btn-primary">${existing?'Lưu thay đổi':'Thêm trợ giảng'}</button>
+      <button type="submit" class="btn btn-primary">Lưu thay đổi</button>
     </div>
   </form>`;
 }
@@ -2756,25 +2807,23 @@ function paymentFormHtml(){
 /* =========================================================
    SETTINGS
    ========================================================= */
-function resetPasswordFormHtml(){
-  return `<form id="modalForm">
-    <div class="field"><label>Mật khẩu mới</label><input type="text" name="password" placeholder="Nhập mật khẩu mới" required autofocus></div>
-    <div class="modal-foot" style="padding:0;margin-top:6px;">
-      <div style="flex:1;"></div>
-      <button type="button" class="btn btn-secondary" data-action="modal-close">Huỷ</button>
-      <button type="submit" class="btn btn-primary">Đặt lại mật khẩu</button>
-    </div>
-  </form>`;
-}
 function accountListHtml(){
-  const rows = (state.users||[]).map(u=>`
+  const rows = profilesCache.map(u=>`
     <div class="account-row">
-      <div class="teacher-avatar" style="width:32px;height:32px;font-size:12px;">${(u.name||'U').trim().charAt(0).toUpperCase()}</div>
+      <div class="teacher-avatar" style="width:32px;height:32px;font-size:12px;">${(u.name||u.email||'U').trim().charAt(0).toUpperCase()}</div>
       <div style="flex:1;min-width:0;">
-        <div class="an">${escapeHtml(u.name)} <span class="role-tag" style="margin-left:6px;">${ROLE_LABEL[u.role]||u.role}</span></div>
-        <div class="au">${escapeHtml(u.username)}</div>
+        <div class="an">${escapeHtml(u.name||u.email)}</div>
+        <div class="au">${escapeHtml(u.email||'')}</div>
       </div>
-      <button class="btn btn-secondary btn-sm" data-action="reset-user-password" data-id="${u.id}">Đặt lại mật khẩu</button>
+      ${isAdmin() && u.id!==currentUser.id ? `
+        <select data-action="change-account-role" data-id="${u.id}" style="border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:12.5px;background:var(--panel);margin-right:8px;">
+          <option value="assistant" ${u.role==='assistant'?'selected':''}>Trợ giảng</option>
+          <option value="teacher" ${u.role==='teacher'?'selected':''}>Giáo viên</option>
+          <option value="admin" ${u.role==='admin'?'selected':''}>Quản trị viên</option>
+        </select>
+      ` : `<span class="role-tag" style="margin-right:8px;">${ROLE_LABEL[u.role]||u.role}</span>`}
+      <button class="btn btn-secondary btn-sm" data-action="reset-user-password" data-email="${escapeHtml(u.email||'')}">Gửi email đặt lại mật khẩu</button>
+      ${isAdmin() && u.id!==currentUser.id ? `<button class="icon-btn del" data-action="delete-assistant" data-id="${u.id}" title="Xoá tài khoản" style="margin-left:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m-9 0v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6"/></svg></button>` : ''}
     </div>`).join('');
   return `<div class="account-list">${rows || '<div class="account-row"><span style="color:var(--ink-faint);font-size:13px;">Chưa có tài khoản nào</span></div>'}</div>`;
 }
@@ -2896,7 +2945,7 @@ function handleModalClick(e){
   if(action==='delete-session'){ if(confirm('Xoá buổi học này?')){ state.sessions = state.sessions.filter(s=>s.id!==id); scheduleSave(); closeModal(); renderView(); toast('Đã xoá buổi học'); } }
   if(action==='delete-class'){ if(confirm('Xoá lớp học này? Học sinh trong lớp sẽ không còn gán lớp.')){ state.classes = state.classes.filter(c=>c.id!==id); scheduleSave(); closeModal(); renderView(); toast('Đã xoá lớp học'); } }
   if(action==='delete-student'){ if(confirm('Xoá học sinh này?')){ state.students = state.students.filter(s=>s.id!==id); scheduleSave(); closeModal(); renderView(); toast('Đã xoá học sinh'); } }
-  if(action==='delete-assistant'){ if(confirm('Xoá trợ giảng này?')){ state.assistants = state.assistants.filter(a=>a.id!==id); scheduleSave(); closeModal(); renderView(); toast('Đã xoá trợ giảng'); } }
+  if(action==='delete-assistant'){ if(confirm('Xoá hồ sơ này? Người này sẽ không thể vào ứng dụng nữa.')){ (async()=>{ const { error } = await sb.from('profiles').delete().eq('id', id); if(error){ toast('Không thể xoá: '+error.message); return; } await fetchAllProfiles(); closeModal(); renderView(); toast('Đã xoá hồ sơ'); })(); } }
   if(action==='delete-studylog'){ if(confirm('Xoá nhật ký này?')){ state.studyLogs = state.studyLogs.filter(l=>l.id!==id); scheduleSave(); closeModal(); renderView(); toast('Đã xoá nhật ký'); } }
   if(action==='delete-grade'){ if(confirm('Xoá điểm số này?')){ state.grades = state.grades.filter(g=>g.id!==id); scheduleSave(); closeModal(); renderView(); toast('Đã xoá điểm số'); } }
   if(action==='delete-invoice'){ if(confirm('Xoá phiếu học phí này?')){ state.invoices = state.invoices.filter(i=>i.id!==id); scheduleSave(); closeModal(); renderView(); toast('Đã xoá phiếu học phí'); } }
@@ -2904,18 +2953,6 @@ function handleModalClick(e){
   if(action==='export-invoice-image'){ exportInvoiceImage(); }
 }
 
-function usernameTaken(u, excludeAssistantId){
-  const uu = (u||'').trim().toLowerCase();
-  if(!uu) return false;
-  if((state.users||[]).some(x=>x.username.toLowerCase()===uu)) return true;
-  return (state.assistants||[]).some(x=>x.id!==excludeAssistantId && (x.username||'').toLowerCase()===uu);
-}
-function uniqueUsername(base){
-  let b = (base||'tg').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'') || 'tg';
-  let candidate = b, i=1;
-  while(usernameTaken(candidate)){ candidate = b + (++i); }
-  return candidate;
-}
 function handleContentClick(e){
   const t = e.target.closest('[data-action]');
   if(!t) return;
@@ -2976,27 +3013,27 @@ function handleContentClick(e){
     }
     case 'delete-student': if(confirm('Xoá học sinh này?')){ state.students = state.students.filter(s=>s.id!==id); scheduleSave(); renderView(); toast('Đã xoá học sinh'); } break;
 
-    /* assistants */
-    case 'open-add-assistant': openModal('Thêm trợ giảng', assistantFormHtml(null), (data)=>{
-        let username = (data.username||'').trim();
-        if(username && usernameTaken(username)){ toast('Tên đăng nhập đã được sử dụng, vui lòng chọn tên khác'); return false; }
-        if(!username) username = uniqueUsername(data.name);
-        const password = (data.password||'').trim() || '123456';
-        state.assistants.push({id:uid(), name:data.name, phone:data.phone||'', email:data.email||'', assignedClassIds:data.assignedClassIds||[], note:data.note||'', username, password});
-        scheduleSave(); renderView(); toast(`Đã thêm trợ giảng — tài khoản: ${username} / ${password}`);
-      }); break;
+    /* assistants (tài khoản Giáo viên/Trợ giảng — dữ liệu ở bảng profiles, Supabase) */
     case 'edit-assistant': {
-      const a = state.assistants.find(x=>x.id===id); if(!a) return;
-      openModal('Sửa trợ giảng', assistantFormHtml(a), (data)=>{
-        let username = (data.username||'').trim() || a.username;
-        if(usernameTaken(username, a.id)){ toast('Tên đăng nhập đã được sử dụng, vui lòng chọn tên khác'); return false; }
-        const password = (data.password||'').trim() || a.password;
-        Object.assign(a, {name:data.name, phone:data.phone||'', email:data.email||'', assignedClassIds:data.assignedClassIds||[], note:data.note||'', username, password});
-        scheduleSave(); renderView(); toast('Đã lưu thay đổi');
+      const a = profilesCache.find(x=>x.id===id); if(!a) return;
+      openModal('Sửa hồ sơ', assistantFormHtml(a), async (data)=>{
+        const patch = { name:data.name, phone:data.phone||'', note:data.note||'', assigned_class_ids: data.assignedClassIds||[] };
+        if(isAdmin() && data.role) patch.role = data.role;
+        const { error } = await sb.from('profiles').update(patch).eq('id', a.id);
+        if(error){ toast('Không thể lưu: '+error.message); return false; }
+        await fetchAllProfiles();
+        renderView(); toast('Đã lưu thay đổi');
       });
       break;
     }
-    case 'delete-assistant': if(confirm('Xoá trợ giảng này?')){ state.assistants = state.assistants.filter(a=>a.id!==id); scheduleSave(); renderView(); toast('Đã xoá trợ giảng'); } break;
+    case 'delete-assistant': if(confirm('Xoá hồ sơ này? Người này sẽ không thể vào ứng dụng nữa (tài khoản đăng nhập gốc trên Supabase vẫn còn, chỉ hồ sơ vai trò bị xoá).')){
+      (async()=>{
+        const { error } = await sb.from('profiles').delete().eq('id', id);
+        if(error){ toast('Không thể xoá: '+error.message); return; }
+        await fetchAllProfiles();
+        renderView(); toast('Đã xoá hồ sơ');
+      })();
+    } break;
 
     /* study log */
     case 'open-add-studylog': openModal('Ghi nhật ký buổi học', studyLogFormHtml(null), (data)=>{
@@ -3110,13 +3147,11 @@ function handleContentClick(e){
 
     /* tài khoản đăng nhập (admin) */
     case 'reset-user-password': {
-      const u = (state.users||[]).find(x=>x.id===id);
-      if(!u) return;
-      openModal(`Đặt lại mật khẩu — ${u.name}`, resetPasswordFormHtml(), (data)=>{
-        const pw = (data.password||'').trim();
-        if(!pw){ toast('Vui lòng nhập mật khẩu mới'); return false; }
-        u.password = pw;
-        scheduleSave(); toast('Đã đặt lại mật khẩu');
+      const email = t.getAttribute('data-email');
+      if(!email){ toast('Không có email cho tài khoản này'); return; }
+      sb.auth.resetPasswordForEmail(email).then(({error})=>{
+        if(error) toast('Không gửi được email: '+error.message);
+        else toast(`Đã gửi email đặt lại mật khẩu tới ${email}`);
       });
       break;
     }
@@ -3131,6 +3166,17 @@ function handleContentChange(e){
     const id = e.target.getAttribute('data-id');
     const r = state.requests.find(x=>x.id===id);
     if(r){ r.status = e.target.value; scheduleSave(); renderView(); toast('Đã cập nhật trạng thái'); }
+  }
+  if(e.target.getAttribute && e.target.getAttribute('data-action')==='change-account-role'){
+    const uid_ = e.target.getAttribute('data-id');
+    const newRole = e.target.value;
+    (async()=>{
+      const { error } = await sb.from('profiles').update({role:newRole}).eq('id', uid_);
+      if(error){ toast('Không thể đổi vai trò: '+error.message); return; }
+      await fetchAllProfiles();
+      renderView();
+      toast('Đã cập nhật vai trò');
+    })();
   }
   if(e.target.id==='avatarFile'){
     const file = e.target.files && e.target.files[0];
@@ -3164,13 +3210,13 @@ function handleContentSubmit(e){
    ========================================================= */
 async function init(){
   document.getElementById('topToday').textContent = new Date().toLocaleDateString('vi-VN', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
-  await loadState();
-  if(ensureAuthSeed()){ await persist(); }
   attachDelegation();
 
-  const restored = restoreSession();
+  const restored = await restoreSupabaseSession();
   if(restored){
     currentUser = restored;
+    await loadState();
+    if(canManage()) await fetchAllProfiles();
     document.getElementById('authScreen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     renderSidebar();
