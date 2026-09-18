@@ -45,15 +45,73 @@ h1,h2,h3,.serif{font-family:'Lora',serif;}
 .mono{font-family:'IBM Plex Mono',monospace;}
 #app{display:none;min-height:100vh;}
 
-/* ---------- Auth screen ---------- */
-#authScreen{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:var(--paper);padding:24px;}
-.auth-card{width:380px;max-width:100%;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-lg);padding:30px 28px;}
+/* ---------- Auth screen / landing page ---------- */
+#authScreen{position:fixed;inset:0;z-index:300;display:none;overflow-y:auto;background:var(--paper);}
+.landing-wrap{max-width:900px;margin:0 auto;padding:28px 24px 90px;}
+.landing-topbar{display:flex;align-items:center;gap:10px;margin-bottom:36px;}
+.landing-topbar .name{font-family:'Lora',serif;font-weight:700;font-size:16px;color:var(--ink);}
+.landing-hero{text-align:center;padding:10px 0 30px;}
+.landing-badge{display:inline-flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 16px;font-size:11.5px;font-weight:700;color:var(--rule-dark);letter-spacing:.3px;margin-bottom:22px;}
+.landing-badge .dot{width:7px;height:7px;border-radius:50%;background:var(--rule);}
+.landing-hero h1{font-family:'Lora',serif;font-size:34px;line-height:1.25;margin:0;color:var(--ink);font-weight:700;}
+.landing-hero h1 .accent{color:var(--rule);}
+.landing-hero p{font-size:14.5px;color:var(--ink-soft);max-width:540px;margin:18px auto 26px;line-height:1.65;}
+.landing-cta-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:22px;}
+.landing-check-row{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;font-size:12.5px;color:var(--ink-soft);}
+
+.landing-section{margin-top:58px;}
+.landing-eyebrow{text-align:center;font-size:11.5px;font-weight:700;color:var(--rule);letter-spacing:.5px;margin-bottom:8px;}
+.landing-section h2{text-align:center;font-family:'Lora',serif;font-size:23px;margin:0 0 28px;color:var(--ink);font-weight:600;}
+
+.landing-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+.landing-step-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px;}
+.landing-step-num{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--rule),var(--rule-dark));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-bottom:14px;}
+.landing-step-card h3{font-size:16px;margin:0 0 7px;color:var(--ink);}
+.landing-step-card p{font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin:0;}
+
+.landing-role-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 22px;max-width:520px;margin:0 auto;}
+.landing-role-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--line-soft);}
+.landing-role-row:last-child{border-bottom:none;}
+.landing-role-left{display:flex;align-items:center;gap:12px;}
+.landing-role-avatar{width:40px;height:40px;border-radius:9px;background:linear-gradient(135deg,var(--rule),var(--rule-dark));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0;}
+.landing-role-name{font-weight:700;font-size:13.5px;color:var(--ink);}
+.landing-role-desc{font-size:11.5px;color:var(--ink-faint);}
+
+.landing-features-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;max-width:680px;margin:0 auto;}
+.landing-feature{display:flex;gap:14px;}
+.landing-feature-icon{width:38px;height:38px;border-radius:9px;background:var(--rule-bg);color:var(--rule);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.landing-feature h4{font-size:14px;margin:0 0 4px;color:var(--ink);}
+.landing-feature p{font-size:12px;color:var(--ink-soft);margin:0;line-height:1.55;}
+
+.landing-mockup{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow-lg);max-width:560px;margin:0 auto;}
+.landing-mockup-bar{display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:1px solid var(--line-soft);background:var(--panel-2);}
+.landing-mockup-bar .d{width:9px;height:9px;border-radius:50%;background:var(--line);}
+.landing-mockup-bar .url{flex:1;text-align:center;font-size:11px;color:var(--ink-faint);}
+.landing-mockup-body{padding:22px;}
+.lm-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}
+.lm-stat{border:1px solid var(--line);border-radius:9px;padding:10px 8px;text-align:center;}
+.lm-stat .l{font-size:10px;color:var(--ink-faint);margin-bottom:4px;}
+.lm-stat .v{font-family:'Lora',serif;font-weight:700;font-size:16px;color:var(--ink);}
+.lm-sched-title{font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:8px;}
+.lm-sched-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line-soft);font-size:12.5px;}
+.lm-sched-row .t{color:var(--rule);font-weight:700;width:44px;flex-shrink:0;}
+.lm-sched-row .n{flex:1;color:var(--ink);}
+.lm-sched-row .d{color:var(--ink-faint);font-size:11.5px;}
+
+.auth-card{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-lg);padding:30px 28px;}
 .auth-brand{display:flex;align-items:center;gap:10px;margin-bottom:24px;}
 .auth-error{background:var(--red-bg);color:var(--red);font-size:12.5px;padding:8px 12px;border-radius:7px;margin-bottom:12px;}
 .auth-hint{font-size:11px;color:var(--ink-faint);margin-top:4px;}
 .auth-switch{text-align:center;font-size:12.5px;color:var(--ink-soft);margin-top:16px;}
 .auth-switch a{color:var(--rule);font-weight:600;text-decoration:none;cursor:pointer;}
 .auth-switch a:hover{text-decoration:underline;}
+
+@media (max-width:720px){
+  .landing-hero h1{font-size:27px;}
+  .landing-steps{grid-template-columns:1fr;}
+  .landing-features-grid{grid-template-columns:1fr;}
+  .lm-stat-grid{grid-template-columns:repeat(2,1fr);}
+}
 
 /* ---------- Sidebar ---------- */
 #sidebar{
@@ -452,17 +510,129 @@ table.data-table tbody tr:last-child td{border-bottom:none;}
 </head>
 <body>
 <div id="authScreen">
-  <div class="auth-card">
-    <div class="auth-brand">
+  <div class="landing-wrap">
+
+    <div class="landing-topbar">
       <div class="brand-mark">
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3V4Z"/><path d="M4 17h14"/><path d="M8 8h6M8 11h6"/></svg>
       </div>
-      <div class="brand-text">
-        <div class="name">Study Diary</div>
-        <div class="tag">Sổ tay quản lý dạy kèm</div>
+      <div class="name">Study Diary</div>
+    </div>
+
+    <div class="landing-hero">
+      <div class="landing-badge"><span class="dot"></span>NỀN TẢNG QUẢN LÝ LỚP HỌC</div>
+      <h1>Quản lý rõ ràng<br><span class="accent">Dạy học nhẹ nhàng.</span></h1>
+      <p>Study Diary gom lịch dạy, điểm số, học phí và học sinh vào một nơi duy nhất — để bạn dành thời gian cho việc dạy tiếng Anh, tiếng Trung, không phải cho giấy tờ.</p>
+      <div class="landing-cta-row">
+        <button class="btn btn-primary" data-action="scroll-to-login" style="padding:12px 26px;font-size:14.5px;">Đăng nhập hệ thống →</button>
+        <button class="btn btn-secondary" data-action="scroll-to-features" style="padding:12px 26px;font-size:14.5px;">Xem tính năng</button>
+      </div>
+      <div class="landing-check-row">
+        <span>✓ Không cần cài đặt</span>
+        <span>✓ Phân quyền theo vai trò</span>
+        <span>✓ Đồng bộ Google Calendar</span>
       </div>
     </div>
-    <div id="authBody"></div>
+
+    <div class="landing-section">
+      <div class="landing-eyebrow">CÁCH DÙNG</div>
+      <h2>Bắt đầu trong ba bước</h2>
+      <div class="landing-steps">
+        <div class="landing-step-card">
+          <div class="landing-step-num">01</div>
+          <h3>Đăng nhập</h3>
+          <p>Truy cập theo vai trò được cấp — quản trị viên, giáo viên hoặc trợ giảng.</p>
+        </div>
+        <div class="landing-step-card">
+          <div class="landing-step-num">02</div>
+          <h3>Thiết lập lớp</h3>
+          <p>Tạo lớp học, lịch dạy, học phí và mời trợ giảng tham gia.</p>
+        </div>
+        <div class="landing-step-card">
+          <div class="landing-step-num">03</div>
+          <h3>Vận hành mỗi ngày</h3>
+          <p>Ghi nhận buổi học, điểm số, thanh toán và xuất phiếu khi cần.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="landing-section">
+      <div class="landing-eyebrow">PHÂN QUYỀN THEO VAI TRÒ</div>
+      <h2>Ai cũng chỉ thấy đúng phần việc của mình</h2>
+      <div class="landing-role-card">
+        <div class="landing-role-row">
+          <div class="landing-role-left">
+            <div class="landing-role-avatar">QT</div>
+            <div><div class="landing-role-name">Quản trị viên</div><div class="landing-role-desc">Toàn quyền hệ thống</div></div>
+          </div>
+          <span class="badge badge-neutral">Full access</span>
+        </div>
+        <div class="landing-role-row">
+          <div class="landing-role-left">
+            <div class="landing-role-avatar">GV</div>
+            <div><div class="landing-role-name">Giáo viên</div><div class="landing-role-desc">Lịch dạy, học sinh, nhật ký, điểm số</div></div>
+          </div>
+          <span class="badge badge-warn">Giới hạn</span>
+        </div>
+        <div class="landing-role-row">
+          <div class="landing-role-left">
+            <div class="landing-role-avatar">TG</div>
+            <div><div class="landing-role-name">Trợ giảng</div><div class="landing-role-desc">Xem và cập nhật cơ bản</div></div>
+          </div>
+          <span class="badge badge-warn">Giới hạn</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="landing-section" id="featuresSection">
+      <div class="landing-eyebrow">VÌ SAO CHỌN STUDY DIARY</div>
+      <h2>Được xây dựng cho công việc thật của giáo viên</h2>
+      <div class="landing-features-grid">
+        <div class="landing-feature">
+          <div class="landing-feature-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 4 5v6c0 5 3.4 8.8 8 10 4.6-1.2 8-5 8-10V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <div><h4>Phân quyền theo vai trò</h4><p>Quản trị viên, giáo viên và trợ giảng chỉ thấy đúng phần việc của mình.</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></div>
+          <div><h4>Đồng bộ Google Calendar</h4><p>Lịch dạy tự cập nhật lên Google Calendar theo thời gian thực, không cần nhập lại thủ công.</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 19h16"/></svg></div>
+          <div><h4>Xuất phiếu chuyên nghiệp</h4><p>Phiếu học phí và báo cáo xuất .csv (Excel, Google Sheet), sẵn sàng gửi phụ huynh.</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M9.5 19a2.5 2.5 0 0 0 5 0"/></svg></div>
+          <div><h4>Thông báo lịch dạy</h4><p>Nhắc trước giờ dạy ngay trên trình duyệt, không bỏ lỡ buổi học nào.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="landing-section">
+      <div class="landing-eyebrow">XEM TRƯỚC</div>
+      <h2>Mọi việc lớp học, trong một nơi</h2>
+      <div class="landing-mockup">
+        <div class="landing-mockup-bar"><span class="d"></span><span class="d"></span><span class="d"></span><div class="url">app.studydiary</div></div>
+        <div class="landing-mockup-body">
+          <div class="lm-stat-grid">
+            <div class="lm-stat"><div class="l">Lớp đang dạy</div><div class="v">05</div></div>
+            <div class="lm-stat"><div class="l">Học sinh</div><div class="v">24</div></div>
+            <div class="lm-stat"><div class="l">Buổi học</div><div class="v">48</div></div>
+            <div class="lm-stat"><div class="l">Học phí</div><div class="v">9,6tr</div></div>
+          </div>
+          <div class="lm-sched-title">Lịch dạy sắp tới</div>
+          <div class="lm-sched-row"><span class="t">17:00</span><span class="n">Tiếng Anh giao tiếp</span><span class="d">60 phút</span></div>
+          <div class="lm-sched-row"><span class="t">19:00</span><span class="n">HSK 3 — Tiếng Trung</span><span class="d">90 phút</span></div>
+          <div class="lm-sched-row"><span class="t">20:30</span><span class="n">1-1 Luyện nói</span><span class="d">45 phút</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="landing-section" id="loginSection" style="max-width:400px;margin-left:auto;margin-right:auto;">
+      <div class="auth-card" style="margin:0;">
+        <div id="authBody"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -2497,7 +2667,9 @@ function enterApp(){
 }
 function showLogin(){
   document.getElementById('app').style.display='none';
-  document.getElementById('authScreen').style.display='flex';
+  const authEl = document.getElementById('authScreen');
+  authEl.style.display='block';
+  authEl.scrollTop = 0;
   renderAuthScreen('login');
 }
 function logout(){
@@ -2531,6 +2703,14 @@ function attachDelegation(){
     if(action==='show-register') renderAuthScreen('register');
     if(action==='show-login') renderAuthScreen('login');
     if(action==='reset-app-data') resetAppData();
+    if(action==='scroll-to-login'){
+      const el = document.getElementById('loginSection');
+      if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+    }
+    if(action==='scroll-to-features'){
+      const el = document.getElementById('featuresSection');
+      if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+    }
   });
 }
 function toggleSidebarMobile(){ document.getElementById('app').classList.toggle('sidebar-open'); }
@@ -2919,7 +3099,7 @@ function showFatalError(err){
   if(appEl) appEl.style.display='none';
   const authScreen = document.getElementById('authScreen');
   const authBody = document.getElementById('authBody');
-  if(authScreen) authScreen.style.display='flex';
+  if(authScreen){ authScreen.style.display='block'; authScreen.scrollTop = 0; }
   if(authBody){
     authBody.innerHTML = `
       <div class="auth-error" style="display:block;">
@@ -2941,7 +3121,7 @@ setTimeout(()=>{
   try{
     const authEl = document.getElementById('authScreen');
     const appEl = document.getElementById('app');
-    const stuck = authEl && appEl && authEl.style.display!=='flex' && appEl.style.display!=='flex';
+    const stuck = authEl && appEl && authEl.style.display!=='block' && appEl.style.display!=='flex';
     if(stuck){
       console.error('Study Diary: phát hiện trang bị treo khi khởi động, tự khôi phục màn hình đăng nhập.');
       if(!state || typeof state!=='object'){ state = seedData(); }
