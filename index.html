@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 :root{
   --paper:#F2F7FC;
@@ -536,6 +537,7 @@ table.data-table tbody tr:last-child td{border-bottom:none;}
 const uid = () => 'id' + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
 const STORAGE_KEY = 'so-lop-data-v1';
 const SESSION_KEY = 'so-lop-session-v1';
+const SCHEMA_VERSION = 2; // tăng số này để tự động bỏ qua dữ liệu cũ không tương thích và khởi tạo lại sạch
 
 /* =========================================================
    SUPABASE CONFIG
@@ -548,6 +550,16 @@ const SUPABASE_ROW_ID = 'main';                 // id cố định của dòng d
 
 const SUPABASE_ENABLED = typeof SUPABASE_URL === 'string' && SUPABASE_URL.startsWith('http') && window.supabase;
 const sb = SUPABASE_ENABLED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+/* --- Đồng bộ Google Calendar (thời gian thực) ---
+   Để bật: tạo OAuth Client ID (loại "Web application") trong Google Cloud
+   Console, bật Google Calendar API, thêm domain bạn deploy trang này vào
+   mục "Authorized JavaScript origins", rồi dán Client ID vào đây.
+   Hướng dẫn chi tiết từng bước nằm trong tab Cài đặt của ứng dụng. */
+const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+const GOOGLE_CALENDAR_ENABLED = typeof GOOGLE_CLIENT_ID === 'string'
+  && GOOGLE_CLIENT_ID.endsWith('.apps.googleusercontent.com')
+  && !GOOGLE_CLIENT_ID.startsWith('YOUR_'); // tránh nhận nhầm chuỗi placeholder là đã cấu hình thật
 
 const CLASS_COLORS = ['#5B6FCF','#3F7A5C','#A6791E','#B3402A','#7C5CBF','#2E8B8B','#C0577A'];
 const WEEKDAY_SHORT = ['CN','T2','T3','T4','T5','T6','T7'];
@@ -564,6 +576,220 @@ function isoDate(d){
 function fmtDate(iso){ const [y,m,d]=iso.split('-'); return `${d}/${m}`; }
 function fmtDateFull(iso){ const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; }
 function fmtMoney(n){ return (Number(n)||0).toLocaleString('vi-VN') + ' đ'; }
+
+/* =========================================================
+   XUẤT DỮ LIỆU: Excel (.csv) & Google Calendar (.ics)
+   ========================================================= */
+function downloadTextFile(filename, content, mime){
+  const blob = new Blob([content], {type: (mime||'text/plain') + ';charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+function csvEscape(v){
+  const s = String(v??'');
+  return /[",\n;]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+function exportCSV(filename, headers, rows){
+  // Thêm BOM để Excel/Google Sheet nhận đúng chữ tiếng Việt có dấu
+  const lines = [headers.map(csvEscape).join(',')].concat(rows.map(r=>r.map(csvEscape).join(',')));
+  downloadTextFile(filename, '\uFEFF' + lines.join('\r\n'), 'text/csv');
+  toast('Đã tải file .csv — mở trực tiếp bằng Excel, hoặc vào Google Sheet > Tệp > Nhập để nhập dữ liệu');
+}
+function icsEscape(v){
+  return String(v??'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
+}
+function icsDateTime(dateStr, timeStr){
+  return dateStr.replace(/-/g,'') + 'T' + (timeStr||'00:00').replace(':','') + '00';
+}
+function exportSessionsICS(){
+  const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//So Lop//Lich day//VI','CALSCALE:GREGORIAN'];
+  state.sessions.forEach(s=>{
+    const cl = classById(s.classId);
+    const title = cl ? `${cl.name} — buổi dạy` : 'Buổi dạy';
+    lines.push('BEGIN:VEVENT');
+    lines.push('UID:' + s.id + '@so-lop');
+    lines.push('DTSTAMP:' + icsDateTime(isoDate(new Date()), '00:00'));
+    lines.push('DTSTART:' + icsDateTime(s.date, s.startTime));
+    lines.push('DTEND:' + icsDateTime(s.date, s.endTime));
+    lines.push('SUMMARY:' + icsEscape(title));
+    if(s.topic) lines.push('DESCRIPTION:' + icsEscape(s.topic));
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  downloadTextFile('so-lop-lich-day.ics', lines.join('\r\n'), 'text/calendar');
+  toast('Đã tải file .ics — mở Google Calendar > Cài đặt > Nhập và đồng bộ để nhập toàn bộ lịch dạy');
+}
+
+/* =========================================================
+   ĐỒNG BỘ GOOGLE CALENDAR THỜI GIAN THỰC (OAuth, Google Identity Services)
+   ========================================================= */
+const GCAL_TOKEN_KEY = 'so-lop-gcal-token-v1';
+let googleAccessToken = null;
+let googleTokenExpiry = 0;
+let googleTokenClient = null;
+try{
+  const cached = JSON.parse(localStorage.getItem(GCAL_TOKEN_KEY)||'null');
+  if(cached && cached.token && cached.expiry > Date.now()){ googleAccessToken = cached.token; googleTokenExpiry = cached.expiry; }
+}catch(e){}
+
+function isGoogleCalendarConnected(){ return !!googleAccessToken && googleTokenExpiry > Date.now(); }
+
+function initGoogleTokenClient(){
+  if(!GOOGLE_CALENDAR_ENABLED) return false;
+  if(typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2){ return false; }
+  if(googleTokenClient) return true;
+  googleTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/calendar.events',
+    callback: (resp)=>{
+      if(resp.error){ toast('Không kết nối được Google Calendar: ' + resp.error); return; }
+      googleAccessToken = resp.access_token;
+      googleTokenExpiry = Date.now() + (Number(resp.expires_in||3300) * 1000);
+      try{ localStorage.setItem(GCAL_TOKEN_KEY, JSON.stringify({token:googleAccessToken, expiry:googleTokenExpiry})); }catch(e){}
+      renderSidebar(); renderView();
+      toast('Đã kết nối Google Calendar — đang đồng bộ lịch dạy...');
+      syncAllSessionsToGoogle();
+    },
+  });
+  return true;
+}
+function connectGoogleCalendar(){
+  if(!GOOGLE_CALENDAR_ENABLED){
+    toast('Chưa cấu hình Google Client ID — xem hướng dẫn trong tab Cài đặt');
+    return;
+  }
+  if(!initGoogleTokenClient()){
+    toast('Google chưa tải xong, vui lòng thử lại sau vài giây');
+    return;
+  }
+  googleTokenClient.requestAccessToken({ prompt: isGoogleCalendarConnected() ? '' : 'consent' });
+}
+function disconnectGoogleCalendar(){
+  googleAccessToken = null; googleTokenExpiry = 0;
+  try{ localStorage.removeItem(GCAL_TOKEN_KEY); }catch(e){}
+  renderSidebar(); renderView();
+  toast('Đã ngắt kết nối Google Calendar');
+}
+async function gcalRequest(method, path, body){
+  const res = await fetch('https://www.googleapis.com/calendar/v3/' + path, {
+    method,
+    headers: { 'Authorization': 'Bearer ' + googleAccessToken, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if(res.status===401){ googleAccessToken=null; googleTokenExpiry=0; try{ localStorage.removeItem(GCAL_TOKEN_KEY); }catch(e){} throw new Error('Phiên Google đã hết hạn, hãy kết nối lại'); }
+  if(!res.ok){ const t = await res.text(); throw new Error('Google Calendar lỗi ' + res.status + ': ' + t); }
+  return res.status===204 ? null : res.json();
+}
+function sessionToGCalEvent(s){
+  const cl = classById(s.classId);
+  return {
+    summary: cl ? `${cl.name} — buổi dạy` : 'Buổi dạy',
+    description: s.topic || s.note || '',
+    start: { dateTime: `${s.date}T${s.startTime}:00`, timeZone: 'Asia/Ho_Chi_Minh' },
+    end:   { dateTime: `${s.date}T${s.endTime}:00`,   timeZone: 'Asia/Ho_Chi_Minh' },
+  };
+}
+async function pushSessionToGoogle(s){
+  if(!isGoogleCalendarConnected()) return;
+  try{
+    const ev = sessionToGCalEvent(s);
+    if(s.gcalEventId){
+      await gcalRequest('PATCH', `calendars/primary/events/${s.gcalEventId}`, ev);
+    } else {
+      const created = await gcalRequest('POST', 'calendars/primary/events', ev);
+      s.gcalEventId = created.id;
+      scheduleSave();
+    }
+  }catch(e){ console.error(e); toast('Đồng bộ Google Calendar lỗi: ' + e.message); }
+}
+async function deleteSessionFromGoogle(s){
+  if(!isGoogleCalendarConnected() || !s.gcalEventId) return;
+  try{ await gcalRequest('DELETE', `calendars/primary/events/${s.gcalEventId}`); }
+  catch(e){ console.error(e); }
+}
+async function syncAllSessionsToGoogle(){
+  if(!isGoogleCalendarConnected()){ connectGoogleCalendar(); return; }
+  toast('Đang đồng bộ ' + state.sessions.length + ' buổi học lên Google Calendar...');
+  let ok=0, fail=0;
+  for(const s of state.sessions){
+    try{
+      const ev = sessionToGCalEvent(s);
+      if(s.gcalEventId){
+        await gcalRequest('PATCH', `calendars/primary/events/${s.gcalEventId}`, ev);
+      } else {
+        const created = await gcalRequest('POST', 'calendars/primary/events', ev);
+        s.gcalEventId = created.id;
+      }
+      ok++;
+    }catch(e){ console.error(e); fail++; }
+  }
+  scheduleSave();
+  toast(`Đã đồng bộ ${ok} buổi học lên Google Calendar${fail?', '+fail+' buổi lỗi':''}`);
+}
+
+/* =========================================================
+   THÔNG BÁO LỊCH DẠY TRÊN MÁY (Web Notification API)
+   Chỉ hoạt động khi tab/trình duyệt còn đang mở (kể cả chạy nền).
+   ========================================================= */
+const NOTIFIED_KEY = 'so-lop-notified-v1';
+let notifiedSessionIds = new Set();
+try{ notifiedSessionIds = new Set(JSON.parse(localStorage.getItem(NOTIFIED_KEY)||'[]')); }catch(e){}
+function saveNotifiedSessionIds(){
+  try{ localStorage.setItem(NOTIFIED_KEY, JSON.stringify(Array.from(notifiedSessionIds).slice(-800))); }catch(e){}
+}
+function notificationSupported(){ return typeof Notification !== 'undefined'; }
+function requestNotificationPermission(){
+  if(!notificationSupported()){ toast('Trình duyệt này không hỗ trợ thông báo trên máy'); return; }
+  Notification.requestPermission().then(perm=>{
+    if(perm==='granted'){
+      state.settings.notifyEnabled = true;
+      scheduleSave();
+      startNotificationWatcher();
+      renderView();
+      toast('Đã bật thông báo lịch dạy trên máy này');
+      new Notification('Sổ Lớp', { body: 'Thông báo lịch dạy đã được bật.' });
+    } else {
+      toast('Bạn chưa cho phép thông báo trong trình duyệt');
+    }
+  });
+}
+function disableNotifications(){
+  state.settings.notifyEnabled = false;
+  scheduleSave();
+  if(notifyWatcherTimer){ clearInterval(notifyWatcherTimer); notifyWatcherTimer = null; }
+  renderView();
+  toast('Đã tắt thông báo lịch dạy');
+}
+function checkUpcomingSessionsForNotify(){
+  if(!state || !state.settings || !state.settings.notifyEnabled) return;
+  if(!notificationSupported() || Notification.permission!=='granted') return;
+  const leadMin = Number(state.settings.notifyLeadMinutes||15);
+  const now = new Date();
+  state.sessions.forEach(s=>{
+    if(notifiedSessionIds.has(s.id)) return;
+    const start = new Date(s.date+'T'+s.startTime+':00');
+    const diffMin = (start - now) / 60000;
+    if(diffMin>0 && diffMin<=leadMin){
+      const cl = classById(s.classId);
+      try{
+        new Notification('Sắp đến giờ dạy', {
+          body: `${cl?cl.name:'Buổi học'} bắt đầu lúc ${s.startTime} (còn khoảng ${Math.round(diffMin)} phút)`,
+        });
+      }catch(e){ console.error(e); }
+      notifiedSessionIds.add(s.id);
+      saveNotifiedSessionIds();
+    }
+  });
+}
+let notifyWatcherTimer = null;
+function startNotificationWatcher(){
+  if(notifyWatcherTimer) return;
+  checkUpcomingSessionsForNotify();
+  notifyWatcherTimer = setInterval(checkUpcomingSessionsForNotify, 60000);
+}
 
 /* ---- little SVG icon/doodle library for the fee card ---- */
 const FEE_ICONS = {
@@ -597,108 +823,29 @@ let state = null;
 let currentUser = null;
 
 function seedData(){
-  const today = new Date();
-  const classes = [
-    {id:uid(), name:'Toán 8', subject:'Toán', level:'Lớp 8', fee:150000, schedule:'T2, T4, T6 — 19:00-20:30', color:CLASS_COLORS[0], note:'Lớp ôn tập kiến thức nền', mode:'offline', courseSessions:24},
-    {id:uid(), name:'Toán 9 CB', subject:'Toán', level:'Lớp 9', fee:180000, schedule:'T3, T5, T7 — 14:00-16:00', color:CLASS_COLORS[1], note:'Chuẩn bị thi vào 10', mode:'offline', courseSessions:30},
-    {id:uid(), name:'Toán 9 NC', subject:'Toán', level:'Lớp 9', fee:200000, schedule:'T2, T4, T6 — 09:30-11:30', color:CLASS_COLORS[2], note:'Lớp nâng cao, luyện đề', mode:'online', courseSessions:30},
-    {id:uid(), name:'Toán 10', subject:'Toán', level:'Lớp 10', fee:220000, schedule:'T2, T4, T6 — 16:00-18:00', color:CLASS_COLORS[3], note:'', mode:'offline', courseSessions:24},
-    {id:uid(), name:'Toán 11', subject:'Toán', level:'Lớp 11', fee:250000, schedule:'T3, T5, T7 — 17:00-19:00', color:CLASS_COLORS[4], note:'', mode:'online', courseSessions:24},
-    {id:uid(), name:'Toán 12', subject:'Toán', level:'Lớp 12', fee:250000, schedule:'T4, T7 — 09:30-11:30', color:CLASS_COLORS[5], note:'Luyện thi tốt nghiệp', mode:'offline', courseSessions:20},
-  ];
-  const byName = n => classes.find(c=>c.name===n);
-  const students = [
-    {id:uid(), name:'Nguyễn Duy Anh', classId:byName('Toán 9 CB').id, dob:'2011-04-12', parentName:'Nguyễn Văn Hải', parentPhone:'0912345678', address:'Ninh Bình', note:'Cần rèn ý thức tự học', status:'active'},
-    {id:uid(), name:'Trần Như Quang', classId:byName('Toán 9 CB').id, dob:'2011-08-03', parentName:'Trần Thị Lan', parentPhone:'0987654321', address:'Ninh Bình', note:'Tiến bộ đều', status:'active'},
-    {id:uid(), name:'Lê Minh Khôi', classId:byName('Toán 8').id, dob:'2012-02-20', parentName:'Lê Văn Sơn', parentPhone:'0909111222', address:'Ninh Bình', note:'', status:'active'},
-    {id:uid(), name:'Phạm Gia Bảo', classId:byName('Toán 10').id, dob:'2010-11-09', parentName:'Phạm Thị Hoa', parentPhone:'0977888999', address:'Ninh Bình', note:'Học lực khá', status:'active'},
-    {id:uid(), name:'Đỗ Thảo Vy', classId:byName('Toán 11').id, dob:'2009-06-15', parentName:'Đỗ Văn Long', parentPhone:'0966555444', address:'Ninh Bình', note:'', status:'active'},
-    {id:uid(), name:'Vũ Anh Thư', classId:byName('Toán 12').id, dob:'2008-01-27', parentName:'Vũ Thị Nga', parentPhone:'0933222111', address:'Ninh Bình', note:'Ôn thi tốt nghiệp', status:'active'},
-    {id:uid(), name:'Bùi Nam Khang', classId:byName('Toán 9 NC').id, dob:'2011-09-30', parentName:'Bùi Văn Tùng', parentPhone:'0955666777', address:'Ninh Bình', note:'', status:'active'},
-  ];
-  const byStudentName = n => students.find(s=>s.name===n);
-
-  const assistants = [
-    {id:uid(), name:'Nguyễn Thu Hà', phone:'0911222333', email:'ha.nguyen@mail.com', assignedClassIds:[byName('Toán 8').id, byName('Toán 9 CB').id], note:'Hỗ trợ chấm bài tập về nhà'},
-    {id:uid(), name:'Trần Đức Minh', phone:'0922333444', email:'minh.tran@mail.com', assignedClassIds:[byName('Toán 11').id, byName('Toán 12').id], note:'Hỗ trợ trực buổi tối'},
-  ];
-
-  const timeOf = (start,end)=>({startTime:start,endTime:end});
-  const sessions = [];
-  // build sessions for current week +/- 2 weeks based on each class's weekday pattern
-  const patternMap = {
-    'Toán 8': {days:[1,3,5], t:['19:00','20:30']},
-    'Toán 9 CB': {days:[2,4,6], t:['14:00','16:00']},
-    'Toán 9 NC': {days:[1,3,5], t:['09:30','11:30']},
-    'Toán 10': {days:[1,3,5], t:['16:00','18:00']},
-    'Toán 11': {days:[2,4,6], t:['17:00','19:00']},
-    'Toán 12': {days:[3,6], t:['09:30','11:30']},
-  };
-  const base = startOfWeek(addDays(today,-14));
-  for(let w=0; w<6; w++){
-    for(let d=0; d<7; d++){
-      const day = addDays(base, w*7+d);
-      const jsDay = day.getDay(); // 0 Sun..6 Sat -> convert to 1 Mon..7 Sun style used above (1=Mon...6=Sat,0=Sun)
-      classes.forEach(c=>{
-        const p = patternMap[c.name];
-        if(p && p.days.includes(jsDay)){
-          sessions.push({id:uid(), classId:c.id, date:isoDate(day), ...timeOf(p.t[0],p.t[1]), note:'', status: day<today? 'done':'scheduled'});
-        }
-      });
-    }
-  }
-
-  const studyLogs = [
-    {id:uid(), studentId:byStudentName('Nguyễn Duy Anh').id, sessionNo:'Buổi 9', date:isoDate(addDays(today,-6)), content:'Ôn tập HPT, giải bài toán bằng cách lập HPT; các hệ phương trình phức tạp; bài toán phần trăm', btvn:70, ythuc:'Lười học', nhanxet:'Cơ bản nắm được cách giải phương trình, giải bài toán bằng cách lập phương trình', ghichu:''},
-    {id:uid(), studentId:byStudentName('Nguyễn Duy Anh').id, sessionNo:'Buổi 10', date:isoDate(addDays(today,-3)), content:'Ôn tập tỉ số lượng giác, hệ thức lượng', btvn:30, ythuc:'Mất tập trung', nhanxet:'Không học bài, quên công thức', ghichu:''},
-    {id:uid(), studentId:byStudentName('Nguyễn Duy Anh').id, sessionNo:'Buổi 11', date:isoDate(addDays(today,-1)), content:'Ôn tập tỉ số lượng giác', btvn:100, ythuc:'Tốt', nhanxet:'Tính toán được các bài lượng giác cơ bản, chưa làm được các bài toán ứng dụng', ghichu:''},
-    {id:uid(), studentId:byStudentName('Trần Như Quang').id, sessionNo:'Buổi 8', date:isoDate(addDays(today,-5)), content:'Giải bài toán bằng cách lập hệ phương trình', btvn:80, ythuc:'Tốt', nhanxet:'Lập được hệ phương trình theo dữ kiện bài toán', ghichu:''},
-    {id:uid(), studentId:byStudentName('Lê Minh Khôi').id, sessionNo:'Buổi 4', date:isoDate(addDays(today,-4)), content:'Bài toán chuyển động, chép 10 lần bài kiểm tra', btvn:70, ythuc:'Nói chuyện riêng', nhanxet:'Phần bài toán liên quan chuyển động không biết làm, sai điều kiện', ghichu:''},
-  ];
-
-  const grades = [
-    {id:uid(), studentId:byStudentName('Nguyễn Duy Anh').id, subject:'Toán', testName:'Kiểm tra 15 phút — Hệ PT', score:6.5, date:isoDate(addDays(today,-8)), note:''},
-    {id:uid(), studentId:byStudentName('Nguyễn Duy Anh').id, subject:'Toán', testName:'Kiểm tra tỉ số lượng giác', score:5, date:isoDate(addDays(today,-2)), note:'Cần luyện thêm'},
-    {id:uid(), studentId:byStudentName('Trần Như Quang').id, subject:'Toán', testName:'Kiểm tra 15 phút — Hệ PT', score:8, date:isoDate(addDays(today,-8)), note:''},
-    {id:uid(), studentId:byStudentName('Vũ Anh Thư').id, subject:'Toán', testName:'Đề thi thử tốt nghiệp số 1', score:7.5, date:isoDate(addDays(today,-10)), note:''},
-  ];
-
-  const invoices = [
-    {id:uid(), studentId:byStudentName('Nguyễn Duy Anh').id, month: monthKey(isoDate(addDays(today,-20))), sessions:8, feePerSession:180000, extra:0, note:'Có ý thức, trách nhiệm làm BTVN. Hợp tác trong quá trình học, có tiến bộ so với buổi đầu.', status:'paid'},
-    {id:uid(), studentId:byStudentName('Trần Như Quang').id, month: monthKey(isoDate(addDays(today,-20))), sessions:9, feePerSession:180000, extra:0, note:'Học đều, chăm chỉ làm bài tập về nhà.', status:'unpaid'},
-  ];
-
-  const payments = [
-    {id:uid(), studentId:byStudentName('Nguyễn Duy Anh').id, invoiceId:invoices[0].id, amount:1600000, date:isoDate(addDays(today,-15)), method:'Chuyển khoản', note:'Học phí tháng trước'},
-  ];
-
-  const requests = [
-    {id:uid(), from:'Phụ huynh bạn Gia Bảo', content:'Xin phép đổi lịch buổi tối thứ 6 sang sáng thứ 7 vì cháu có việc gia đình.', date:isoDate(addDays(today,-2)), status:'Đang xử lý'},
-    {id:uid(), from:'Phụ huynh bạn Thảo Vy', content:'Nhờ cô gửi giúp phiếu học phí tháng này để chuyển khoản.', date:isoDate(addDays(today,-1)), status:'Mới'},
-  ];
-
-  const feedback = [
-    {id:uid(), from:'Phụ huynh bạn Duy Anh', content:'Cảm ơn cô đã kiên nhẫn với con, con đã tiến bộ rõ rệt trong 2 tháng qua.', rating:5, date:isoDate(addDays(today,-7))},
-    {id:uid(), from:'Phụ huynh bạn Nam Khang', content:'Mong cô gửi thêm bài tập về nhà cho con luyện thêm vào cuối tuần.', rating:4, date:isoDate(addDays(today,-3))},
-  ];
-
   const settings = {
-    teacherName:'Nguyễn Trang Anh',
-    phone:'0978654345',
-    bankAccount:'0385569139',
-    bankName:'Vietcombank',
-    bankAccountName:'CAO THI PHUONG THU',
+    teacherName:'',
+    phone:'',
+    bankAccount:'',
+    bankName:'',
+    bankAccountName:'',
     subjectDefault:'Toán',
     address:'',
     note:'',
-    avatarUrl:''
+    avatarUrl:'',
+    notifyEnabled:false,
+    notifyLeadMinutes:15
   };
 
   const users = [
     {id:uid(), name:'Josee Cao', username:'josee', password:'JoseeCao@242', email:'joseecao242@gmail.com', role:'admin', permissions:(typeof ROLE_PERMISSIONS!=='undefined'?ROLE_PERMISSIONS.admin.slice():[])},
   ];
 
-  return {classes, students, assistants, sessions, studyLogs, grades, invoices, payments, requests, feedback, settings, users};
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    classes:[], students:[], assistants:[], sessions:[], studyLogs:[], grades:[], invoices:[], payments:[], requests:[], feedback:[],
+    settings, users
+  };
 }
 
 /* Thông tin ngân hàng chuẩn hiện tại của giáo viên. Nếu dữ liệu đã lưu (localStorage/Supabase)
@@ -733,16 +880,45 @@ function ensureUsers(){
   return changed;
 }
 
+/* Đảm bảo mọi mảng/đối tượng dữ liệu luôn tồn tại đúng kiểu, kể cả khi dữ liệu
+   được nạp từ một phiên bản cũ thiếu trường — tránh lỗi trắng trang khi render. */
+function sanitizeState(){
+  if(!state || typeof state!=='object') return false;
+  let changed = false;
+  ['classes','students','assistants','sessions','studyLogs','grades','invoices','payments','requests','feedback'].forEach(key=>{
+    if(!Array.isArray(state[key])){ state[key]=[]; changed=true; }
+  });
+  if(!state.settings || typeof state.settings!=='object'){
+    state.settings = {teacherName:'',phone:'',bankAccount:'',bankName:'',bankAccountName:'',subjectDefault:'Toán',address:'',note:'',avatarUrl:'',notifyEnabled:false,notifyLeadMinutes:15};
+    changed = true;
+  }
+  if(state.settings.notifyEnabled===undefined){ state.settings.notifyEnabled=false; changed=true; }
+  if(state.settings.notifyLeadMinutes===undefined){ state.settings.notifyLeadMinutes=15; changed=true; }
+  if(ensureUsers()) changed = true;
+  state.schemaVersion = SCHEMA_VERSION;
+  return changed;
+}
+
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error((label||'Thao tác')+' quá thời gian chờ')), ms))
+  ]);
+}
+
 async function loadState(){
-  // 1) Ưu tiên Supabase nếu đã cấu hình
+  // 1) Ưu tiên Supabase nếu đã cấu hình (có giới hạn thời gian chờ để không bao giờ treo trang)
   if(SUPABASE_ENABLED){
     try{
-      const { data, error } = await sb.from('app_state').select('data').eq('id', SUPABASE_ROW_ID).maybeSingle();
+      const { data, error } = await withTimeout(
+        sb.from('app_state').select('data').eq('id', SUPABASE_ROW_ID).maybeSingle(),
+        6000, 'Kết nối Supabase'
+      );
       if(error) throw error;
-      if(data && data.data){
+      if(data && data.data && data.data.schemaVersion===SCHEMA_VERSION){
         state = data.data;
         let changed = syncBankInfo();
-        if(ensureUsers()) changed = true;
+        if(sanitizeState()) changed = true;
         if(changed){ await persist(); }
         // vẫn giữ một bản sao ở localStorage để mở nhanh lần sau / phòng mất mạng
         try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
@@ -750,21 +926,24 @@ async function loadState(){
       }
     }catch(e){
       console.error('Supabase load lỗi, dùng dữ liệu cục bộ:', e);
-      toast('Không tải được dữ liệu từ Supabase, dùng bản lưu cục bộ');
     }
   }
   // 2) Nếu chưa cấu hình Supabase hoặc lỗi mạng -> dùng localStorage
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(raw){
-      state = JSON.parse(raw);
-      let changed = syncBankInfo();
-      if(ensureUsers()) changed = true;
-      if(changed){ await persist(); }
-      return;
+      const parsed = JSON.parse(raw);
+      if(parsed && parsed.schemaVersion===SCHEMA_VERSION){
+        state = parsed;
+        let changed = syncBankInfo();
+        if(sanitizeState()) changed = true;
+        if(changed){ await persist(); }
+        return;
+      }
+      // dữ liệu cũ không khớp phiên bản hiện tại -> bỏ qua, khởi tạo sạch bên dưới
     }
-  }catch(e){ /* ignore */ }
-  // 3) Lần đầu chạy -> dữ liệu mẫu
+  }catch(e){ /* dữ liệu hỏng -> bỏ qua, khởi tạo sạch bên dưới */ }
+  // 3) Lần đầu chạy hoặc dữ liệu cũ không tương thích -> khởi tạo sạch (chỉ có tài khoản quản trị)
   state = seedData();
   await persist();
 }
@@ -875,16 +1054,22 @@ const NAV_ICONS = {
 
 /* =========================================================
    TÀI KHOẢN & PHÂN QUYỀN
+   Chỉ Quản trị viên (josee) có toàn quyền. Tài khoản đăng ký với vai trò
+   Giáo viên hay Trợ giảng đều nhận CÙNG một mức quyền hạn chế (xem lịch,
+   học sinh, nhật ký, điểm số) — không truy cập Học phí/Thanh toán/Cài đặt/
+   Tài khoản. Quyền luôn được tính trực tiếp theo vai trò hiện tại của tài
+   khoản (không dùng bản snapshot cũ), nên đổi vai trò áp dụng ngay lập tức.
    ========================================================= */
+const STAFF_PERMISSIONS = ['overview','schedule','students','studylog','grades'];
 const ROLE_PERMISSIONS = {
   admin:     ['overview','reports','schedule','classes','students','assistants','studylog','grades','tuition','requests','feedback','payments','settings','accounts'],
-  teacher:   ['overview','reports','schedule','classes','students','assistants','studylog','grades','tuition','requests','feedback','payments','settings'],
-  assistant: ['overview','schedule','students','studylog','grades'],
+  teacher:   STAFF_PERMISSIONS,
+  assistant: STAFF_PERMISSIONS,
 };
 const ROLE_LABELS = {admin:'Quản trị viên', teacher:'Giáo viên', assistant:'Trợ giảng'};
 function hasPermission(view){
   if(!currentUser) return false;
-  const perms = currentUser.permissions || ROLE_PERMISSIONS[currentUser.role] || [];
+  const perms = ROLE_PERMISSIONS[currentUser.role] || [];
   return perms.includes(view);
 }
 
@@ -1262,7 +1447,16 @@ function renderSchedule(){
           <button class="${calMode==='month'?'active':''}" data-action="cal-mode" data-mode="month">Tháng</button>
         </div>
       </div>
-      <button class="btn btn-primary" data-action="open-add-session">+ Ghi buổi học mới</button>
+      <div class="row gap8">
+        <button class="btn btn-secondary btn-sm" data-action="export-ics" title="Tải file .ics để nhập thủ công vào Google Calendar/Outlook">Xuất .ics</button>
+        ${GOOGLE_CALENDAR_ENABLED ? (
+          isGoogleCalendarConnected()
+            ? `<button class="btn btn-secondary" data-action="sync-gcal" title="Đẩy toàn bộ buổi học lên Google Calendar">🔄 Đồng bộ Google Calendar</button>
+               <button class="icon-btn" data-action="disconnect-gcal" title="Ngắt kết nối Google Calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg></button>`
+            : `<button class="btn btn-secondary" data-action="connect-gcal" title="Kết nối và đồng bộ thời gian thực với Google Calendar">🔗 Kết nối Google Calendar</button>`
+        ) : ''}
+        <button class="btn btn-primary" data-action="open-add-session">+ Ghi buổi học mới</button>
+      </div>
     </div>
   `;
   const summary = scheduleSummaryHtml();
@@ -1493,7 +1687,10 @@ function renderStudents(){
   return `
     <div class="row between mb16">
       <div class="panel-sub" style="font-size:13px;">${state.students.length} học sinh</div>
-      <button class="btn btn-primary" data-action="open-add-student">+ Thêm học sinh</button>
+      <div class="row gap8">
+        <button class="btn btn-secondary" data-action="export-csv-students">Xuất Excel (.csv)</button>
+        <button class="btn btn-primary" data-action="open-add-student">+ Thêm học sinh</button>
+      </div>
     </div>
     <div class="panel">
       <table class="data-table">
@@ -1627,7 +1824,10 @@ function renderStudyLog(){
   return `
     <div class="row between mb16">
       <select id="studyLogFilterSelect" style="border:1px solid var(--line);border-radius:7px;padding:8px 11px;font-size:13px;background:var(--panel);">${filterOpts}</select>
-      <button class="btn btn-primary" data-action="open-add-studylog">+ Ghi nhật ký buổi học</button>
+      <div class="row gap8">
+        <button class="btn btn-secondary" data-action="export-csv-studylog">Xuất Excel (.csv)</button>
+        <button class="btn btn-primary" data-action="open-add-studylog">+ Ghi nhật ký buổi học</button>
+      </div>
     </div>
     <div class="panel">
       <table class="data-table">
@@ -1690,7 +1890,10 @@ function renderGrades(){
   return `
     <div class="row between mb16">
       <select id="gradeFilterSelect" style="border:1px solid var(--line);border-radius:7px;padding:8px 11px;font-size:13px;background:var(--panel);">${filterOpts}</select>
-      <button class="btn btn-primary" data-action="open-add-grade">+ Thêm điểm số</button>
+      <div class="row gap8">
+        <button class="btn btn-secondary" data-action="export-csv-grades">Xuất Excel (.csv)</button>
+        <button class="btn btn-primary" data-action="open-add-grade">+ Thêm điểm số</button>
+      </div>
     </div>
     <div class="panel">
       <table class="data-table">
@@ -1753,7 +1956,10 @@ function renderTuition(){
     </div>
     <div class="row between mb16">
       <div class="panel-sub" style="font-size:13px;">Danh sách phiếu học phí</div>
-      <button class="btn btn-primary" data-action="open-add-invoice">+ Tạo phiếu học phí</button>
+      <div class="row gap8">
+        <button class="btn btn-secondary" data-action="export-csv-invoices">Xuất Excel (.csv)</button>
+        <button class="btn btn-primary" data-action="open-add-invoice">+ Tạo phiếu học phí</button>
+      </div>
     </div>
     <div class="panel">
       <table class="data-table">
@@ -2005,7 +2211,10 @@ function renderPayments(){
     </div>
     <div class="row between mb16">
       <div class="panel-sub" style="font-size:13px;">Lịch sử thanh toán</div>
-      <button class="btn btn-primary" data-action="open-add-payment">+ Ghi nhận thanh toán</button>
+      <div class="row gap8">
+        <button class="btn btn-secondary" data-action="export-csv-payments">Xuất Excel (.csv)</button>
+        <button class="btn btn-primary" data-action="open-add-payment">+ Ghi nhận thanh toán</button>
+      </div>
     </div>
     <div class="panel">
       <table class="data-table">
@@ -2070,6 +2279,67 @@ function renderSettings(){
         <button type="submit" class="btn btn-primary">Lưu cài đặt</button>
       </form>
     </div>
+
+    <div class="panel panel-pad mb24" style="max-width:560px;margin-top:16px;">
+      <div class="panel-title mb16">Đồng bộ Google Calendar</div>
+      ${GOOGLE_CALENDAR_ENABLED ? `
+        <div style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">
+          Trạng thái: ${isGoogleCalendarConnected()
+            ? '<span class="badge badge-good">Đã kết nối</span> — mọi buổi học được thêm/sửa/xoá trong tab Lịch dạy sẽ tự động cập nhật lên Google Calendar của bạn.'
+            : '<span class="badge badge-flat">Chưa kết nối</span> — bấm nút bên dưới để đăng nhập Google và cho phép Sổ Lớp ghi lịch.'}
+        </div>
+        <div class="row gap8">
+          ${isGoogleCalendarConnected()
+            ? `<button class="btn btn-secondary" data-action="sync-gcal">🔄 Đồng bộ lại toàn bộ lịch dạy</button>
+               <button class="btn btn-danger" data-action="disconnect-gcal">Ngắt kết nối</button>`
+            : `<button class="btn btn-primary" data-action="connect-gcal">🔗 Kết nối Google Calendar</button>`}
+        </div>
+      ` : `
+        <div style="font-size:13px;color:var(--ink-soft);margin-bottom:10px;">
+          Chưa cấu hình. Làm theo các bước dưới đây (chỉ cần làm một lần):
+        </div>
+        <ol style="font-size:12.5px;color:var(--ink-soft);padding-left:18px;line-height:1.9;">
+          <li>Vào <b>console.cloud.google.com</b> → tạo một dự án mới (bất kỳ tên nào).</li>
+          <li>Vào <b>APIs &amp; Services → Library</b>, tìm và bật <b>Google Calendar API</b>.</li>
+          <li>Vào <b>APIs &amp; Services → OAuth consent screen</b>: chọn "External", điền tên ứng dụng + email của bạn. Ở mục "Test users", thêm chính email Google bạn dùng để mở Google Calendar.</li>
+          <li>Vào <b>APIs &amp; Services → Credentials → Create Credentials → OAuth client ID</b>, loại <b>Web application</b>.</li>
+          <li>Ở mục <b>Authorized JavaScript origins</b>, thêm đúng địa chỉ web nơi bạn host file này (ví dụ: https://ten-mien-cua-ban.com). Nếu chỉ mở file trên máy (file://) thì Google KHÔNG cho phép — bạn cần host trang này lên một địa chỉ web thật (Netlify, Vercel, GitHub Pages... đều miễn phí).</li>
+          <li>Bấm Create, Google sẽ đưa ra một <b>Client ID</b> dạng <span class="mono">xxxx.apps.googleusercontent.com</span>.</li>
+          <li>Mở file <span class="mono">index.html</span>, tìm dòng <span class="mono">const GOOGLE_CLIENT_ID</span> ở gần đầu file, dán Client ID vào đó rồi lưu và deploy lại.</li>
+        </ol>
+        <div style="font-size:11.5px;color:var(--ink-faint);margin-top:8px;">Sau khi dán Client ID, tải lại trang — nút "Kết nối Google Calendar" sẽ xuất hiện ở đây và trong tab Lịch dạy.</div>
+      `}
+    </div>
+
+    <div class="panel panel-pad mb24" style="max-width:560px;margin-top:16px;">
+      <div class="panel-title mb16">Thông báo lịch dạy trên máy</div>
+      <div style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">
+        Trạng thái: ${s.notifyEnabled ? '<span class="badge badge-good">Đang bật</span>' : '<span class="badge badge-flat">Đang tắt</span>'}
+        — báo trước <b>${s.notifyLeadMinutes||15} phút</b> khi sắp đến giờ dạy. Chỉ hoạt động khi trình duyệt/tab này còn mở.
+      </div>
+      <form id="notifySettingsForm" class="row gap8" style="align-items:flex-end;flex-wrap:wrap;">
+        <div class="field" style="margin-bottom:0;max-width:160px;">
+          <label>Báo trước (phút)</label>
+          <input type="number" name="notifyLeadMinutes" min="1" max="180" value="${s.notifyLeadMinutes||15}">
+        </div>
+        <button type="submit" class="btn btn-secondary">Lưu số phút</button>
+        ${s.notifyEnabled
+          ? `<button type="button" class="btn btn-danger" data-action="disable-notify">Tắt thông báo</button>`
+          : `<button type="button" class="btn btn-primary" data-action="enable-notify">Bật thông báo</button>`}
+      </form>
+      <div style="font-size:11.5px;color:var(--ink-faint);margin-top:10px;">
+        Muốn nhận thông báo đáng tin cậy hơn trên điện thoại kể cả khi không mở trang này? Cách chắc chắn nhất là kết nối Google Calendar ở trên — ứng dụng Google Calendar trên điện thoại sẽ tự nhắc lịch cho bạn.
+      </div>
+    </div>
+    ${currentUser && currentUser.role==='admin' ? `
+    <div class="panel panel-pad mb24" style="max-width:560px;margin-top:16px;border-color:var(--red-bg);">
+      <div class="panel-title mb16" style="color:var(--red);">Xoá dữ liệu</div>
+      <div style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">
+        Xoá toàn bộ Lớp học, Học sinh, Trợ giảng, Lịch dạy, Nhật ký học tập, Điểm số, Học phí, Thanh toán, Yêu cầu và Góp ý.
+        Giao diện, tài khoản đăng nhập và thông tin giáo viên/ngân hàng ở trên sẽ được giữ nguyên. Không thể hoàn tác.
+      </div>
+      <button class="btn btn-danger" data-action="reset-all-data">Xoá toàn bộ dữ liệu, chỉ giữ giao diện</button>
+    </div>` : ''}
   `;
 }
 
@@ -2154,7 +2424,8 @@ function loginFormHtml(){
     <div id="authError" class="auth-error" style="display:none;"></div>
     <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Đăng nhập</button>
   </form>
-  <div class="auth-switch">Chưa có tài khoản? <a href="#" data-action="show-register">Đăng ký ngay</a></div>`;
+  <div class="auth-switch">Chưa có tài khoản? <a href="#" data-action="show-register">Đăng ký ngay</a></div>
+  <div class="auth-switch" style="margin-top:6px;"><a href="#" data-action="reset-app-data" style="color:var(--ink-faint);">Gặp lỗi khi tải trang? Đặt lại dữ liệu</a></div>`;
 }
 function registerFormHtml(){
   return `<form id="registerForm">
@@ -2168,7 +2439,7 @@ function registerFormHtml(){
         <option value="teacher">Giáo viên</option>
         <option value="assistant">Trợ giảng</option>
       </select>
-      <div class="auth-hint">Hệ thống sẽ tự động phân quyền các chức năng phù hợp theo vai trò bạn chọn.</div>
+      <div class="auth-hint">Giáo viên và Trợ giảng hiện có cùng mức quyền: xem Lịch dạy, Học sinh, Nhật ký học tập, Điểm số. Chỉ tài khoản Quản trị viên mới thấy Học phí, Thanh toán, Cài đặt và Tài khoản.</div>
     </div>
     <div id="authError" class="auth-error" style="display:none;"></div>
     <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Đăng ký tài khoản</button>
@@ -2220,6 +2491,9 @@ function enterApp(){
   document.getElementById('app').style.display='flex';
   renderSidebar();
   navigate('overview');
+  if(state.settings && state.settings.notifyEnabled && notificationSupported() && Notification.permission==='granted'){
+    startNotificationWatcher();
+  }
 }
 function showLogin(){
   document.getElementById('app').style.display='none';
@@ -2253,8 +2527,10 @@ function attachDelegation(){
     const t = e.target.closest('[data-action]');
     if(!t) return;
     e.preventDefault();
-    if(t.getAttribute('data-action')==='show-register') renderAuthScreen('register');
-    if(t.getAttribute('data-action')==='show-login') renderAuthScreen('login');
+    const action = t.getAttribute('data-action');
+    if(action==='show-register') renderAuthScreen('register');
+    if(action==='show-login') renderAuthScreen('login');
+    if(action==='reset-app-data') resetAppData();
   });
 }
 function toggleSidebarMobile(){ document.getElementById('app').classList.toggle('sidebar-open'); }
@@ -2283,7 +2559,14 @@ function handleModalClick(e){
   const action = t.getAttribute('data-action');
   const id = t.getAttribute('data-id');
   if(action==='modal-close'){ closeModal(); return; }
-  if(action==='delete-session'){ if(confirm('Xoá buổi học này?')){ state.sessions = state.sessions.filter(s=>s.id!==id); scheduleSave(); closeModal(); renderView(); toast('Đã xoá buổi học'); } }
+  if(action==='delete-session'){
+    if(confirm('Xoá buổi học này?')){
+      const sess = state.sessions.find(s=>s.id===id);
+      state.sessions = state.sessions.filter(s=>s.id!==id);
+      scheduleSave(); closeModal(); renderView(); toast('Đã xoá buổi học');
+      if(sess) deleteSessionFromGoogle(sess);
+    }
+  }
   if(action==='delete-class'){ if(confirm('Xoá lớp học này? Học sinh trong lớp sẽ không còn gán lớp.')){ state.classes = state.classes.filter(c=>c.id!==id); scheduleSave(); closeModal(); renderView(); toast('Đã xoá lớp học'); } }
   if(action==='delete-student'){ if(confirm('Xoá học sinh này?')){ state.students = state.students.filter(s=>s.id!==id); scheduleSave(); closeModal(); renderView(); toast('Đã xoá học sinh'); } }
   if(action==='delete-assistant'){ if(confirm('Xoá trợ giảng này?')){ state.assistants = state.assistants.filter(a=>a.id!==id); scheduleSave(); closeModal(); renderView(); toast('Đã xoá trợ giảng'); } }
@@ -2309,9 +2592,17 @@ function handleContentClick(e){
     case 'cal-next': calCursor = calMode==='week'? addDays(calCursor,7) : new Date(calCursor.getFullYear(), calCursor.getMonth()+1, 1); renderView(); break;
     case 'cal-today': calCursor = new Date(); renderView(); break;
     case 'cal-mode': calMode = t.getAttribute('data-mode'); renderView(); break;
+    case 'export-ics': exportSessionsICS(); break;
+    case 'connect-gcal': connectGoogleCalendar(); break;
+    case 'sync-gcal': syncAllSessionsToGoogle(); break;
+    case 'disconnect-gcal': disconnectGoogleCalendar(); break;
+    case 'enable-notify': requestNotificationPermission(); break;
+    case 'disable-notify': disableNotifications(); break;
     case 'open-add-session': openModal('Ghi buổi học mới', sessionFormHtml(null), (data)=>{
-        state.sessions.push({id:uid(), classId:data.classId, date:data.date, startTime:data.startTime, endTime:data.endTime, note:data.note||'', status:'scheduled'});
+        const newSess = {id:uid(), classId:data.classId, date:data.date, startTime:data.startTime, endTime:data.endTime, note:data.note||'', status:'scheduled'};
+        state.sessions.push(newSess);
         scheduleSave(); renderView(); toast('Đã thêm buổi học');
+        if(isGoogleCalendarConnected()) pushSessionToGoogle(newSess);
       }); break;
     case 'view-session': case 'edit-session': {
       const sess = state.sessions.find(s=>s.id===id);
@@ -2319,6 +2610,7 @@ function handleContentClick(e){
       openModal('Chi tiết buổi học', sessionFormHtml(sess), (data)=>{
         Object.assign(sess, {classId:data.classId, date:data.date, startTime:data.startTime, endTime:data.endTime, note:data.note||''});
         scheduleSave(); renderView(); toast('Đã lưu thay đổi');
+        if(isGoogleCalendarConnected()) pushSessionToGoogle(sess);
       });
       break;
     }
@@ -2339,6 +2631,15 @@ function handleContentClick(e){
     case 'delete-class': if(confirm('Xoá lớp học này?')){ state.classes = state.classes.filter(c=>c.id!==id); scheduleSave(); renderView(); toast('Đã xoá lớp học'); } break;
 
     /* students */
+    case 'export-csv-students': {
+      const headers = ['Họ và tên','Lớp','Ngày sinh','Phụ huynh','SĐT phụ huynh','Địa chỉ','Trạng thái','Ghi chú'];
+      const rows = state.students.map(s=>{
+        const cl = classById(s.classId);
+        return [s.name, cl?cl.name:'', s.dob?fmtDateFull(s.dob):'', s.parentName||'', s.parentPhone||'', s.address||'', s.status==='active'?'Đang học':'Tạm nghỉ', s.note||''];
+      });
+      exportCSV('so-lop-hoc-sinh.csv', headers, rows);
+      break;
+    }
     case 'open-add-student': openModal('Thêm học sinh', studentFormHtml(null), (data)=>{
         state.students.push({id:uid(), name:data.name, classId:data.classId||'', dob:data.dob||'', parentName:data.parentName||'', parentPhone:data.parentPhone||'', address:data.address||'', note:data.note||'', status:data.status||'active'});
         scheduleSave(); renderView(); toast('Đã thêm học sinh');
@@ -2369,6 +2670,15 @@ function handleContentClick(e){
     case 'delete-assistant': if(confirm('Xoá trợ giảng này?')){ state.assistants = state.assistants.filter(a=>a.id!==id); scheduleSave(); renderView(); toast('Đã xoá trợ giảng'); } break;
 
     /* study log */
+    case 'export-csv-studylog': {
+      const headers = ['Buổi','Ngày','Học sinh','Nội dung','BTVN (%)','Ý thức','Nhận xét','Ghi chú'];
+      const rows = state.studyLogs.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(l=>{
+        const st = studentById(l.studentId);
+        return [l.sessionNo||'', fmtDateFull(l.date), st?st.name:'', l.content||'', l.btvn, l.ythuc||'', l.nhanxet||'', l.ghichu||''];
+      });
+      exportCSV('so-lop-nhat-ky-hoc-tap.csv', headers, rows);
+      break;
+    }
     case 'open-add-studylog': openModal('Ghi nhật ký buổi học', studyLogFormHtml(null), (data)=>{
         state.studyLogs.push({id:uid(), studentId:data.studentId, sessionNo:data.sessionNo||'', date:data.date, content:data.content||'', btvn:Number(data.btvn||0), ythuc:data.ythuc||'', nhanxet:data.nhanxet||'', ghichu:data.ghichu||''});
         scheduleSave(); renderView(); toast('Đã thêm nhật ký');
@@ -2384,6 +2694,15 @@ function handleContentClick(e){
     case 'delete-studylog': if(confirm('Xoá nhật ký này?')){ state.studyLogs = state.studyLogs.filter(l=>l.id!==id); scheduleSave(); renderView(); toast('Đã xoá nhật ký'); } break;
 
     /* grades */
+    case 'export-csv-grades': {
+      const headers = ['Học sinh','Môn','Bài kiểm tra','Điểm','Ngày','Ghi chú'];
+      const rows = state.grades.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(g=>{
+        const st = studentById(g.studentId);
+        return [st?st.name:'', g.subject||'', g.testName||'', g.score, fmtDateFull(g.date), g.note||''];
+      });
+      exportCSV('so-lop-diem-so.csv', headers, rows);
+      break;
+    }
     case 'open-add-grade': openModal('Thêm điểm số', gradeFormHtml(null), (data)=>{
         state.grades.push({id:uid(), studentId:data.studentId, subject:data.subject||'Toán', testName:data.testName, score:Number(data.score), date:data.date, note:data.note||''});
         scheduleSave(); renderView(); toast('Đã thêm điểm số');
@@ -2399,6 +2718,16 @@ function handleContentClick(e){
     case 'delete-grade': if(confirm('Xoá điểm số này?')){ state.grades = state.grades.filter(g=>g.id!==id); scheduleSave(); renderView(); toast('Đã xoá điểm số'); } break;
 
     /* tuition */
+    case 'export-csv-invoices': {
+      const headers = ['Học sinh','Tháng','Số buổi','Học phí/buổi','Phụ phí','Tổng thu','Trạng thái','Ghi chú'];
+      const rows = state.invoices.slice().sort((a,b)=>b.month.localeCompare(a.month)).map(inv=>{
+        const st = studentById(inv.studentId);
+        const total = inv.sessions*inv.feePerSession + Number(inv.extra||0);
+        return [st?st.name:'', monthLabel(inv.month), inv.sessions, inv.feePerSession, inv.extra||0, total, inv.status==='paid'?'Đã thu':'Chưa thu', inv.note||''];
+      });
+      exportCSV('so-lop-hoc-phi.csv', headers, rows);
+      break;
+    }
     case 'open-add-invoice': openModal('Tạo phiếu học phí', invoiceFormHtml(null), (data)=>{
         state.invoices.push({id:uid(), studentId:data.studentId, month:data.month, sessions:Number(data.sessions), feePerSession:Number(data.feePerSession), extra:Number(data.extra||0), note:data.note||'', status:data.status||'unpaid'});
         scheduleSave(); renderView(); toast('Đã tạo phiếu học phí');
@@ -2446,6 +2775,15 @@ function handleContentClick(e){
     case 'delete-feedback': if(confirm('Xoá góp ý này?')){ state.feedback = state.feedback.filter(f=>f.id!==id); scheduleSave(); renderView(); toast('Đã xoá góp ý'); } break;
 
     /* payments */
+    case 'export-csv-payments': {
+      const headers = ['Học sinh','Số tiền','Ngày','Hình thức','Ghi chú'];
+      const rows = state.payments.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(p=>{
+        const st = studentById(p.studentId);
+        return [st?st.name:'', p.amount, fmtDateFull(p.date), p.method||'', p.note||''];
+      });
+      exportCSV('so-lop-thanh-toan.csv', headers, rows);
+      break;
+    }
     case 'open-add-payment': openModal('Ghi nhận thanh toán', paymentFormHtml(), (data)=>{
         state.payments.push({id:uid(), studentId:data.studentId, amount:Number(data.amount), date:data.date, method:data.method||'Chuyển khoản', note:data.note||''});
         scheduleSave(); renderView(); toast('Đã ghi nhận thanh toán');
@@ -2471,6 +2809,20 @@ function handleContentClick(e){
       openModal('Đổi mật khẩu', resetPasswordFormHtml(u), (data)=>{
         u.password = data.password; scheduleSave(); toast('Đã cập nhật mật khẩu');
       });
+      break;
+    }
+
+    /* xoá toàn bộ dữ liệu, giữ giao diện + tài khoản */
+    case 'reset-all-data': {
+      if(!currentUser || currentUser.role!=='admin'){ toast('Chỉ Quản trị viên mới được thực hiện thao tác này'); break; }
+      const ok1 = confirm('Xoá TOÀN BỘ lớp học, học sinh, lịch dạy, nhật ký, điểm số, học phí, thanh toán, yêu cầu và góp ý?\nKhông thể hoàn tác. Tài khoản đăng nhập và thông tin giáo viên sẽ được giữ nguyên.');
+      if(!ok1) break;
+      const typed = prompt('Để xác nhận, hãy gõ chính xác chữ XOA (không dấu, in hoa):');
+      if(typed !== 'XOA'){ toast('Đã huỷ — không có gì bị xoá'); break; }
+      ['classes','students','assistants','sessions','studyLogs','grades','invoices','payments','requests','feedback'].forEach(key=>{ state[key] = []; });
+      scheduleSave();
+      renderView();
+      toast('Đã xoá toàn bộ dữ liệu, chỉ còn giữ lại giao diện');
       break;
     }
 
@@ -2530,25 +2882,75 @@ function handleContentSubmit(e){
     renderSidebar();
     toast('Đã lưu cài đặt');
   }
+  if(e.target.id==='notifySettingsForm'){
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const mins = Number(fd.get('notifyLeadMinutes'))||15;
+    state.settings.notifyLeadMinutes = mins;
+    scheduleSave();
+    toast('Đã lưu số phút báo trước');
+  }
 }
 
 /* =========================================================
    INIT
    ========================================================= */
 async function init(){
-  document.getElementById('topToday').textContent = new Date().toLocaleDateString('vi-VN', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
-  await loadState();
-  attachDelegation();
-  let savedUserId = null;
-  try{ savedUserId = localStorage.getItem(SESSION_KEY); }catch(err){}
-  const savedUser = savedUserId ? state.users.find(u=>u.id===savedUserId) : null;
-  if(savedUser){
-    currentUser = savedUser;
-    enterApp();
-  } else {
-    showLogin();
+  try{
+    document.getElementById('topToday').textContent = new Date().toLocaleDateString('vi-VN', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+    await loadState();
+    attachDelegation();
+    let savedUserId = null;
+    try{ savedUserId = localStorage.getItem(SESSION_KEY); }catch(err){}
+    const savedUser = savedUserId ? state.users.find(u=>u.id===savedUserId) : null;
+    if(savedUser){
+      currentUser = savedUser;
+      enterApp();
+    } else {
+      showLogin();
+    }
+  }catch(err){
+    console.error('Lỗi khởi tạo Sổ Lớp:', err);
+    showFatalError(err);
   }
 }
+function showFatalError(err){
+  const appEl = document.getElementById('app');
+  if(appEl) appEl.style.display='none';
+  const authScreen = document.getElementById('authScreen');
+  const authBody = document.getElementById('authBody');
+  if(authScreen) authScreen.style.display='flex';
+  if(authBody){
+    authBody.innerHTML = `
+      <div class="auth-error" style="display:block;">
+        Có lỗi khi tải ứng dụng: ${escapeHtml((err&&err.message)||String(err))}<br>Vui lòng tải lại trang. Nếu vẫn lỗi, hãy bấm nút bên dưới để xoá dữ liệu cũ đang lưu trong trình duyệt và bắt đầu lại.
+      </div>
+      <button type="button" class="btn btn-danger" style="width:100%;justify-content:center;" data-action="reset-app-data">Xoá dữ liệu cũ &amp; tải lại</button>
+    `;
+  }
+}
+function resetAppData(){
+  try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+  try{ localStorage.removeItem(SESSION_KEY); }catch(e){}
+  location.reload();
+}
+/* Lưới an toàn cuối cùng: nếu vì bất kỳ lý do gì mà sau 8 giây trang vẫn
+   trắng (không phải màn hình đăng nhập, không phải app), tự động hiển thị
+   lại màn hình đăng nhập với dữ liệu mặc định để không ai bị kẹt ở trang trắng. */
+setTimeout(()=>{
+  try{
+    const authEl = document.getElementById('authScreen');
+    const appEl = document.getElementById('app');
+    const stuck = authEl && appEl && authEl.style.display!=='flex' && appEl.style.display!=='flex';
+    if(stuck){
+      console.error('Sổ Lớp: phát hiện trang bị treo khi khởi động, tự khôi phục màn hình đăng nhập.');
+      if(!state || typeof state!=='object'){ state = seedData(); }
+      try{ attachDelegation(); }catch(e){}
+      showLogin();
+    }
+  }catch(e){ /* bỏ qua */ }
+}, 8000);
+
 init();
 </script>
 </body>
