@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sổ Lớp — Quản lý lớp dạy kèm</title>
+<title>Study Diary — Quản lý lớp dạy kèm</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -458,7 +458,7 @@ table.data-table tbody tr:last-child td{border-bottom:none;}
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3V4Z"/><path d="M4 17h14"/><path d="M8 8h6M8 11h6"/></svg>
       </div>
       <div class="brand-text">
-        <div class="name">Sổ Lớp</div>
+        <div class="name">Study Diary</div>
         <div class="tag">Sổ tay quản lý dạy kèm</div>
       </div>
     </div>
@@ -473,7 +473,7 @@ table.data-table tbody tr:last-child td{border-bottom:none;}
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3V4Z"/><path d="M4 17h14"/><path d="M8 8h6M8 11h6"/></svg>
       </div>
       <div class="brand-text">
-        <div class="name">Sổ Lớp</div>
+        <div class="name">Study Diary</div>
         <div class="tag">Sổ tay quản lý dạy kèm</div>
       </div>
     </div>
@@ -605,12 +605,12 @@ function icsDateTime(dateStr, timeStr){
   return dateStr.replace(/-/g,'') + 'T' + (timeStr||'00:00').replace(':','') + '00';
 }
 function exportSessionsICS(){
-  const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//So Lop//Lich day//VI','CALSCALE:GREGORIAN'];
+  const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Study Diary//Lich day//VI','CALSCALE:GREGORIAN'];
   state.sessions.forEach(s=>{
     const cl = classById(s.classId);
     const title = cl ? `${cl.name} — buổi dạy` : 'Buổi dạy';
     lines.push('BEGIN:VEVENT');
-    lines.push('UID:' + s.id + '@so-lop');
+    lines.push('UID:' + s.id + '@study-diary');
     lines.push('DTSTAMP:' + icsDateTime(isoDate(new Date()), '00:00'));
     lines.push('DTSTART:' + icsDateTime(s.date, s.startTime));
     lines.push('DTEND:' + icsDateTime(s.date, s.endTime));
@@ -619,7 +619,7 @@ function exportSessionsICS(){
     lines.push('END:VEVENT');
   });
   lines.push('END:VCALENDAR');
-  downloadTextFile('so-lop-lich-day.ics', lines.join('\r\n'), 'text/calendar');
+  downloadTextFile('study-diary-lich-day.ics', lines.join('\r\n'), 'text/calendar');
   toast('Đã tải file .ics — mở Google Calendar > Cài đặt > Nhập và đồng bộ để nhập toàn bộ lịch dạy');
 }
 
@@ -750,7 +750,7 @@ function requestNotificationPermission(){
       startNotificationWatcher();
       renderView();
       toast('Đã bật thông báo lịch dạy trên máy này');
-      new Notification('Sổ Lớp', { body: 'Thông báo lịch dạy đã được bật.' });
+      new Notification('Study Diary', { body: 'Thông báo lịch dạy đã được bật.' });
     } else {
       toast('Bạn chưa cho phép thông báo trong trình duyệt');
     }
@@ -2286,7 +2286,7 @@ function renderSettings(){
         <div style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">
           Trạng thái: ${isGoogleCalendarConnected()
             ? '<span class="badge badge-good">Đã kết nối</span> — mọi buổi học được thêm/sửa/xoá trong tab Lịch dạy sẽ tự động cập nhật lên Google Calendar của bạn.'
-            : '<span class="badge badge-flat">Chưa kết nối</span> — bấm nút bên dưới để đăng nhập Google và cho phép Sổ Lớp ghi lịch.'}
+            : '<span class="badge badge-flat">Chưa kết nối</span> — bấm nút bên dưới để đăng nhập Google và cho phép Study Diary ghi lịch.'}
         </div>
         <div class="row gap8">
           ${isGoogleCalendarConnected()
@@ -2637,7 +2637,7 @@ function handleContentClick(e){
         const cl = classById(s.classId);
         return [s.name, cl?cl.name:'', s.dob?fmtDateFull(s.dob):'', s.parentName||'', s.parentPhone||'', s.address||'', s.status==='active'?'Đang học':'Tạm nghỉ', s.note||''];
       });
-      exportCSV('so-lop-hoc-sinh.csv', headers, rows);
+      exportCSV('study-diary-hoc-sinh.csv', headers, rows);
       break;
     }
     case 'open-add-student': openModal('Thêm học sinh', studentFormHtml(null), (data)=>{
@@ -2676,7 +2676,7 @@ function handleContentClick(e){
         const st = studentById(l.studentId);
         return [l.sessionNo||'', fmtDateFull(l.date), st?st.name:'', l.content||'', l.btvn, l.ythuc||'', l.nhanxet||'', l.ghichu||''];
       });
-      exportCSV('so-lop-nhat-ky-hoc-tap.csv', headers, rows);
+      exportCSV('study-diary-nhat-ky-hoc-tap.csv', headers, rows);
       break;
     }
     case 'open-add-studylog': openModal('Ghi nhật ký buổi học', studyLogFormHtml(null), (data)=>{
@@ -2700,7 +2700,7 @@ function handleContentClick(e){
         const st = studentById(g.studentId);
         return [st?st.name:'', g.subject||'', g.testName||'', g.score, fmtDateFull(g.date), g.note||''];
       });
-      exportCSV('so-lop-diem-so.csv', headers, rows);
+      exportCSV('study-diary-diem-so.csv', headers, rows);
       break;
     }
     case 'open-add-grade': openModal('Thêm điểm số', gradeFormHtml(null), (data)=>{
@@ -2725,7 +2725,7 @@ function handleContentClick(e){
         const total = inv.sessions*inv.feePerSession + Number(inv.extra||0);
         return [st?st.name:'', monthLabel(inv.month), inv.sessions, inv.feePerSession, inv.extra||0, total, inv.status==='paid'?'Đã thu':'Chưa thu', inv.note||''];
       });
-      exportCSV('so-lop-hoc-phi.csv', headers, rows);
+      exportCSV('study-diary-hoc-phi.csv', headers, rows);
       break;
     }
     case 'open-add-invoice': openModal('Tạo phiếu học phí', invoiceFormHtml(null), (data)=>{
@@ -2781,7 +2781,7 @@ function handleContentClick(e){
         const st = studentById(p.studentId);
         return [st?st.name:'', p.amount, fmtDateFull(p.date), p.method||'', p.note||''];
       });
-      exportCSV('so-lop-thanh-toan.csv', headers, rows);
+      exportCSV('study-diary-thanh-toan.csv', headers, rows);
       break;
     }
     case 'open-add-payment': openModal('Ghi nhận thanh toán', paymentFormHtml(), (data)=>{
@@ -2910,7 +2910,7 @@ async function init(){
       showLogin();
     }
   }catch(err){
-    console.error('Lỗi khởi tạo Sổ Lớp:', err);
+    console.error('Lỗi khởi tạo Study Diary:', err);
     showFatalError(err);
   }
 }
@@ -2943,7 +2943,7 @@ setTimeout(()=>{
     const appEl = document.getElementById('app');
     const stuck = authEl && appEl && authEl.style.display!=='flex' && appEl.style.display!=='flex';
     if(stuck){
-      console.error('Sổ Lớp: phát hiện trang bị treo khi khởi động, tự khôi phục màn hình đăng nhập.');
+      console.error('Study Diary: phát hiện trang bị treo khi khởi động, tự khôi phục màn hình đăng nhập.');
       if(!state || typeof state!=='object'){ state = seedData(); }
       try{ attachDelegation(); }catch(e){}
       showLogin();
