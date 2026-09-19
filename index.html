@@ -87,7 +87,16 @@ h1,h2,h3,.serif{font-family:'Lora',serif;}
 .landing-mockup-bar{display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:1px solid var(--line-soft);background:var(--panel-2);}
 .landing-mockup-bar .d{width:9px;height:9px;border-radius:50%;background:var(--line);}
 .landing-mockup-bar .url{flex:1;text-align:center;font-size:11px;color:var(--ink-faint);}
-.landing-mockup-body{padding:22px;}
+.landing-mockup-body{padding:22px;flex:1;min-width:0;}
+.lm-body-flex{display:flex;}
+.lm-icon-rail{display:flex;flex-direction:column;gap:14px;padding:20px 14px;border-right:1px solid var(--line-soft);background:var(--panel-2);}
+.lm-rail-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--ink-faint);}
+.lm-rail-icon.active{background:var(--rule-bg);color:var(--rule);}
+.lm-eyebrow{font-size:10.5px;font-weight:700;color:var(--rule);letter-spacing:.4px;margin-bottom:4px;}
+.lm-heading-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.lm-heading-row h4{font-family:'Lora',serif;font-size:16px;margin:0;color:var(--ink);}
+.lm-month-badge{font-size:11px;font-weight:600;color:var(--ink-soft);background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;white-space:nowrap;}
+.lm-sub{font-size:11.5px;color:var(--ink-faint);margin:4px 0 18px;}
 .lm-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}
 .lm-stat{border:1px solid var(--line);border-radius:9px;padding:10px 8px;text-align:center;}
 .lm-stat .l{font-size:10px;color:var(--ink-faint);margin-bottom:4px;}
@@ -97,6 +106,18 @@ h1,h2,h3,.serif{font-family:'Lora',serif;}
 .lm-sched-row .t{color:var(--rule);font-weight:700;width:44px;flex-shrink:0;}
 .lm-sched-row .n{flex:1;color:var(--ink);}
 .lm-sched-row .d{color:var(--ink-faint);font-size:11.5px;}
+
+.landing-quicknav-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line-soft);border:1px solid var(--line);border-radius:12px;overflow:hidden;max-width:600px;margin:0 auto;}
+.qn-cell{background:var(--panel);padding:20px;display:flex;align-items:center;gap:14px;}
+.qn-icon{width:36px;height:36px;border-radius:9px;background:var(--rule-bg);color:var(--rule);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.qn-title{font-size:14px;font-weight:700;color:var(--ink);}
+.qn-desc{font-size:11.5px;color:var(--ink-faint);margin-top:2px;}
+
+.landing-detail-stack{display:flex;flex-direction:column;gap:1px;background:var(--line-soft);border:1px solid var(--line);border-radius:12px;overflow:hidden;max-width:600px;margin:0 auto;}
+.landing-detail-card{background:var(--panel);padding:20px 22px;display:flex;align-items:center;gap:16px;}
+.fd-icon{width:40px;height:40px;border-radius:10px;background:var(--rule-bg);color:var(--rule);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.landing-detail-card h3{font-size:14.5px;margin:0 0 3px;color:var(--ink);}
+.landing-detail-card p{font-size:12px;color:var(--ink-soft);margin:0;line-height:1.5;}
 
 .auth-card{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-lg);padding:30px 28px;}
 .auth-brand{display:flex;align-items:center;gap:10px;margin-bottom:24px;}
@@ -108,6 +129,9 @@ h1,h2,h3,.serif{font-family:'Lora',serif;}
 
 @media (max-width:720px){
   .landing-hero h1{font-size:27px;}
+  .landing-quicknav-grid{grid-template-columns:1fr;}
+  .lm-body-flex{flex-direction:column;}
+  .lm-icon-rail{flex-direction:row;border-right:none;border-bottom:1px solid var(--line-soft);}
   .landing-steps{grid-template-columns:1fr;}
   .landing-features-grid{grid-template-columns:1fr;}
   .lm-stat-grid{grid-template-columns:repeat(2,1fr);}
@@ -607,22 +631,67 @@ table.data-table tbody tr:last-child td{border-bottom:none;}
       </div>
     </div>
 
+    <div class="landing-section" id="tinhnangSection">
+      <div class="landing-quicknav-grid">
+        <div class="qn-cell"><div class="qn-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.7-3.6 3.3-5.6 6.5-5.6s5.8 2 6.5 5.6"/><circle cx="17.5" cy="7.5" r="2.3"/><path d="M15.8 13.3c2.6.3 4.3 2 4.9 4.9"/></svg></div><div><div class="qn-title">Lớp học</div><div class="qn-desc">Danh sách và sĩ số</div></div></div>
+        <div class="qn-cell"><div class="qn-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 3v3M16 3v3"/></svg></div><div><div class="qn-title">Lịch dạy</div><div class="qn-desc">Buổi học và chuyên cần</div></div></div>
+        <div class="qn-cell"><div class="qn-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M4 19h16M9 19v-6M14 19V9M19 19v-4"/></svg></div><div><div class="qn-title">Điểm số</div><div class="qn-desc">Kết quả và tiến độ</div></div></div>
+        <div class="qn-cell"><div class="qn-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 13h6M9 17h6"/></svg></div><div><div class="qn-title">Học phí</div><div class="qn-desc">Thanh toán và phiếu</div></div></div>
+      </div>
+
+      <div style="margin-top:56px;">
+        <div class="landing-eyebrow">TÍNH NĂNG CHÍNH</div>
+        <h2>Mọi việc lớp học, trong một quy trình.</h2>
+        <p style="text-align:center;font-size:13.5px;color:var(--ink-soft);max-width:480px;margin:-14px auto 30px;line-height:1.6;">Tập trung vào công việc cần làm, không mất thời gian tìm kiếm dữ liệu.</p>
+      </div>
+
+      <div class="landing-detail-stack">
+        <div class="landing-detail-card">
+          <div class="fd-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.7-3.6 3.3-5.6 6.5-5.6s5.8 2 6.5 5.6"/><circle cx="17.5" cy="7.5" r="2.3"/><path d="M15.8 13.3c2.6.3 4.3 2 4.9 4.9"/></svg></div>
+          <div><h3>Quản lý lớp học</h3><p>Theo dõi lớp, danh sách học sinh và thông tin cần thiết.</p></div>
+        </div>
+        <div class="landing-detail-card">
+          <div class="fd-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 3v3M16 3v3"/></svg></div>
+          <div><h3>Lịch dạy</h3><p>Sắp xếp buổi học theo tuần hoặc tháng, theo dõi chuyên cần và tính công dạy.</p></div>
+        </div>
+        <div class="landing-detail-card">
+          <div class="fd-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M4 19h16M9 19v-6M14 19V9M19 19v-4"/></svg></div>
+          <div><h3>Điểm số</h3><p>Nhập, sửa và theo dõi kết quả theo lớp hoặc từng học sinh.</p></div>
+        </div>
+        <div class="landing-detail-card">
+          <div class="fd-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 13h6M9 17h6"/></svg></div>
+          <div><h3>Học phí &amp; phiếu</h3><p>Đối soát thanh toán, phụ thu, giảm phí và xuất phiếu.</p></div>
+        </div>
+      </div>
+    </div>
+
     <div class="landing-section">
       <div class="landing-eyebrow">XEM TRƯỚC</div>
       <h2>Mọi việc lớp học, trong một nơi</h2>
       <div class="landing-mockup">
         <div class="landing-mockup-bar"><span class="d"></span><span class="d"></span><span class="d"></span><div class="url">app.studydiary</div></div>
-        <div class="landing-mockup-body">
-          <div class="lm-stat-grid">
-            <div class="lm-stat"><div class="l">Lớp đang dạy</div><div class="v">05</div></div>
-            <div class="lm-stat"><div class="l">Học sinh</div><div class="v">24</div></div>
-            <div class="lm-stat"><div class="l">Buổi học</div><div class="v">48</div></div>
-            <div class="lm-stat"><div class="l">Học phí</div><div class="v">9,6tr</div></div>
+        <div class="lm-body-flex">
+          <div class="lm-icon-rail">
+            <div class="lm-rail-icon active"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M4 19h16M9 19v-6M14 19V9M19 19v-4"/></svg></div>
+            <div class="lm-rail-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 3v3M16 3v3"/></svg></div>
+            <div class="lm-rail-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.7-3.6 3.3-5.6 6.5-5.6s5.8 2 6.5 5.6"/><circle cx="17.5" cy="7.5" r="2.3"/><path d="M15.8 13.3c2.6.3 4.3 2 4.9 4.9"/></svg></div>
+            <div class="lm-rail-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 13h6M9 17h6"/></svg></div>
           </div>
-          <div class="lm-sched-title">Lịch dạy sắp tới</div>
-          <div class="lm-sched-row"><span class="t">17:00</span><span class="n">Tiếng Anh giao tiếp</span><span class="d">60 phút</span></div>
-          <div class="lm-sched-row"><span class="t">19:00</span><span class="n">HSK 3 — Tiếng Trung</span><span class="d">90 phút</span></div>
-          <div class="lm-sched-row"><span class="t">20:30</span><span class="n">1-1 Luyện nói</span><span class="d">45 phút</span></div>
+          <div class="landing-mockup-body">
+            <div class="lm-eyebrow">TỔNG QUAN LỚP HỌC</div>
+            <div class="lm-heading-row"><h4>Quản lý lớp học</h4><span class="lm-month-badge">Tháng: 09/2026</span></div>
+            <p class="lm-sub">Theo dõi lịch dạy, học sinh và học phí trong một nơi.</p>
+            <div class="lm-stat-grid">
+              <div class="lm-stat"><div class="l">Lớp đang dạy</div><div class="v">05</div></div>
+              <div class="lm-stat"><div class="l">Học sinh</div><div class="v">24</div></div>
+              <div class="lm-stat"><div class="l">Buổi học</div><div class="v">48</div></div>
+              <div class="lm-stat"><div class="l">Học phí</div><div class="v">9,6tr</div></div>
+            </div>
+            <div class="lm-sched-title">Lịch dạy sắp tới</div>
+            <div class="lm-sched-row"><span class="t">17:00</span><span class="n">HSK 1</span><span class="d">60 phút</span></div>
+            <div class="lm-sched-row"><span class="t">19:00</span><span class="n">HSK 2</span><span class="d">90 phút</span></div>
+            <div class="lm-sched-row"><span class="t">20:30</span><span class="n">Bổ trợ</span><span class="d">45 phút</span></div>
+          </div>
         </div>
       </div>
     </div>
