@@ -783,12 +783,73 @@ const SCHEMA_VERSION = 2; // tăng số này để tự động bỏ qua dữ li
    Dán URL và anon key dự án Supabase của bạn vào đây.
    Xem hướng dẫn tạo bảng ở phần chat kèm theo file này.
    ========================================================= */
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';       // vd: https://abcxyz.supabase.co
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
-const SUPABASE_ROW_ID = 'main';                 // id cố định của dòng dữ liệu duy nhất
+const SUPABASE_URL_DEFAULT = 'YOUR_SUPABASE_URL';       // vd: https://abcxyz.supabase.co — có thể sửa thẳng ở đây nếu bạn tự deploy code, hoặc để trống và dán trong tab Cài đặt
+const SUPABASE_ANON_KEY_DEFAULT = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_ROW_ID = 'main';                 // id cố định của dòng dữ liệu duy nhất, không cần đổi
+const SUPABASE_CONFIG_KEY = 'study-diary-supabase-config-v1';
 
-const SUPABASE_ENABLED = typeof SUPABASE_URL === 'string' && SUPABASE_URL.startsWith('http') && window.supabase;
-const sb = SUPABASE_ENABLED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+function getSupabaseConfig(){
+  try{
+    const raw = localStorage.getItem(SUPABASE_CONFIG_KEY);
+    if(raw){
+      const cfg = JSON.parse(raw);
+      if(cfg && cfg.url && cfg.anonKey) return cfg;
+    }
+  }catch(e){}
+  return { url: SUPABASE_URL_DEFAULT, anonKey: SUPABASE_ANON_KEY_DEFAULT };
+}
+function isSupabaseConfigured(){
+  const cfg = getSupabaseConfig();
+  return typeof cfg.url==='string' && cfg.url.startsWith('http')
+    && typeof cfg.anonKey==='string' && cfg.anonKey && cfg.anonKey!=='YOUR_SUPABASE_ANON_KEY'
+    && !!window.supabase;
+}
+let _sbClient = null;
+let _sbClientKey = '';
+function getSupabaseClient(){
+  if(!isSupabaseConfigured()) return null;
+  const cfg = getSupabaseConfig();
+  const key = cfg.url + '|' + cfg.anonKey;
+  if(_sbClient && _sbClientKey===key) return _sbClient;
+  _sbClient = window.supabase.createClient(cfg.url, cfg.anonKey);
+  _sbClientKey = key;
+  return _sbClient;
+}
+async function connectSupabase(url, anonKey){
+  try{ localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({url, anonKey})); }catch(e){}
+  _sbClient = null; _sbClientKey = '';
+  if(!isSupabaseConfigured()){ toast('Thông tin Supabase chưa hợp lệ, kiểm tra lại URL và Anon key'); renderView(); return; }
+  try{
+    const sb = getSupabaseClient();
+    const { data, error } = await withTimeout(
+      sb.from('app_state').select('data').eq('id', SUPABASE_ROW_ID).maybeSingle(),
+      8000, 'Kết nối Supabase'
+    );
+    if(error) throw error;
+    if(data && data.data && data.data.schemaVersion===SCHEMA_VERSION){
+      // Máy chủ đã có dữ liệu (thiết bị khác đã kết nối trước) -> lấy dữ liệu đó làm chuẩn cho máy này
+      state = data.data;
+      sanitizeState(); syncBankInfo();
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+      toast('Đã tải dữ liệu đồng bộ từ thiết bị khác về máy này');
+    } else {
+      // Chưa có dữ liệu trên máy chủ -> đẩy dữ liệu hiện tại của máy này lên làm bản gốc
+      await persist();
+      toast('Đã bật đồng bộ — dữ liệu máy này vừa được đẩy lên làm bản gốc');
+    }
+    renderSidebar(); renderView();
+  }catch(e){
+    console.error(e);
+    toast('Không kết nối được Supabase — kiểm tra lại URL/Anon key và đã tạo bảng app_state chưa');
+    renderView();
+  }
+}
+function disconnectSupabase(){
+  try{ localStorage.removeItem(SUPABASE_CONFIG_KEY); }catch(e){}
+  _sbClient = null; _sbClientKey = '';
+  toast('Đã ngắt đồng bộ nhiều thiết bị — dữ liệu chỉ còn lưu trên máy này');
+  renderView();
+}
 
 /* --- Đồng bộ Google Calendar (thời gian thực) ---
    Để bật: tạo OAuth Client ID (loại "Web application") trong Google Cloud
@@ -1152,8 +1213,9 @@ function withTimeout(promise, ms, label){
 
 async function loadState(){
   // 1) Ưu tiên Supabase nếu đã cấu hình (có giới hạn thời gian chờ để không bao giờ treo trang)
-  if(SUPABASE_ENABLED){
+  if(isSupabaseConfigured()){
     try{
+      const sb = getSupabaseClient();
       const { data, error } = await withTimeout(
         sb.from('app_state').select('data').eq('id', SUPABASE_ROW_ID).maybeSingle(),
         6000, 'Kết nối Supabase'
@@ -1196,9 +1258,13 @@ let saveTimer=null;
 async function persist(){
   // Luôn lưu cục bộ trước để không mất dữ liệu nếu mất mạng
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ console.error('localStorage lỗi', e); }
-  if(SUPABASE_ENABLED){
+  if(isSupabaseConfigured()){
     try{
-      const { error } = await sb.from('app_state').upsert({ id: SUPABASE_ROW_ID, data: state, updated_at: new Date().toISOString() });
+      const sb = getSupabaseClient();
+      const { error } = await withTimeout(
+        sb.from('app_state').upsert({ id: SUPABASE_ROW_ID, data: state, updated_at: new Date().toISOString() }),
+        6000, 'Lưu lên Supabase'
+      );
       if(error) throw error;
     }catch(e){
       console.error('Supabase lưu lỗi:', e);
@@ -2524,6 +2590,51 @@ function renderSettings(){
       </form>
     </div>
 
+    ${currentUser && currentUser.role==='admin' ? `
+    <div class="panel panel-pad mb24" style="max-width:560px;margin-top:16px;">
+      <div class="panel-title mb16">Đồng bộ nhiều thiết bị (điện thoại ⇄ máy tính)</div>
+      <div style="font-size:13px;color:var(--ink-soft);margin-bottom:12px;">
+        Trạng thái: ${!isSupabaseConfigured()
+          ? '<span class="badge badge-flat">Chưa cấu hình</span> — mặc định dữ liệu chỉ lưu trên từng máy/trình duyệt riêng, mở link ở máy khác sẽ không thấy dữ liệu. Cấu hình bên dưới để đồng bộ dữ liệu giữa mọi thiết bị.'
+          : '<span class="badge badge-good">Đã bật đồng bộ</span> — mọi thay đổi sẽ tự lưu lên máy chủ Supabase và hiện ra trên mọi thiết bị mở cùng địa chỉ web này.'}
+      </div>
+      <form id="supabaseConfigForm" class="row gap8" style="align-items:flex-end;flex-wrap:wrap;margin-bottom:6px;">
+        <div class="field" style="margin-bottom:0;flex:1;min-width:220px;">
+          <label>Project URL</label>
+          <input name="supabaseUrl" value="${escapeHtml(getSupabaseConfig().url===SUPABASE_URL_DEFAULT?'':getSupabaseConfig().url)}" placeholder="https://xxxx.supabase.co">
+        </div>
+        <div class="field" style="margin-bottom:0;flex:1;min-width:220px;">
+          <label>Anon (public) Key</label>
+          <input name="supabaseAnonKey" value="${escapeHtml(getSupabaseConfig().anonKey===SUPABASE_ANON_KEY_DEFAULT?'':getSupabaseConfig().anonKey)}" placeholder="eyJhbGciOi...">
+        </div>
+        <button type="submit" class="btn btn-secondary">Lưu &amp; đồng bộ</button>
+      </form>
+      ${isSupabaseConfigured() ? `<button class="btn btn-danger btn-sm" data-action="disconnect-supabase" style="margin-top:6px;">Ngắt đồng bộ (chỉ dùng máy này)</button>` : ''}
+      <details style="margin-top:14px;">
+        <summary style="cursor:pointer;font-size:12.5px;font-weight:600;color:var(--rule);">Chưa có Project URL / Anon Key? Xem hướng dẫn (làm một lần, miễn phí)</summary>
+        <ol style="font-size:12.5px;color:var(--ink-soft);padding-left:18px;line-height:1.9;margin-top:10px;">
+          <li>Vào <b>supabase.com</b> → đăng ký/đăng nhập (miễn phí) → <b>New project</b>. Đặt tên bất kỳ, tạo mật khẩu database, chọn khu vực gần Việt Nam (Singapore), bấm Create — đợi khoảng 1-2 phút để khởi tạo.</li>
+          <li>Vào mục <b>SQL Editor</b> (biểu tượng ở sidebar trái) → <b>New query</b> → dán đoạn SQL sau rồi bấm <b>Run</b>:</li>
+        </ol>
+        <pre style="background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:11.5px;overflow-x:auto;margin:0 0 10px;">create table app_state (
+  id text primary key,
+  data jsonb,
+  updated_at timestamptz
+);
+alter table app_state enable row level security;
+create policy "allow anon read" on app_state for select using (true);
+create policy "allow anon write" on app_state for insert with check (true);
+create policy "allow anon update" on app_state for update using (true);</pre>
+        <ol start="3" style="font-size:12.5px;color:var(--ink-soft);padding-left:18px;line-height:1.9;">
+          <li>Vào mục <b>Project Settings → API</b>: copy <b>Project URL</b> và khoá <b>anon public</b> (KHÔNG copy khoá "service_role" — khoá đó tuyệt đối không được dán vào đây hay chia sẻ với ai).</li>
+          <li>Dán 2 giá trị đó vào 2 ô ở trên rồi bấm <b>"Lưu &amp; đồng bộ"</b>.</li>
+          <li>Mở đúng link web này trên điện thoại (hoặc máy khác), dán lại đúng Project URL + Anon Key này vào Cài đặt trên thiết bị đó — từ lúc đó dữ liệu hai máy sẽ tự đồng bộ.</li>
+        </ol>
+        <div style="font-size:11px;color:var(--ink-faint);margin-top:6px;">Lưu ý: Anon key này không phải bí mật tuyệt đối như mật khẩu, nhưng ai có URL + Anon key đều đọc/ghi được dữ liệu — không đăng công khai link kèm 2 giá trị này ở nơi công cộng.</div>
+      </details>
+    </div>
+    ` : ''}
+
     <div class="panel panel-pad mb24" style="max-width:560px;margin-top:16px;">
       <div class="panel-title mb16">Đồng bộ Google Calendar</div>
       <div style="font-size:13px;color:var(--ink-soft);margin-bottom:12px;">
@@ -2856,6 +2967,7 @@ function handleContentClick(e){
     case 'connect-gcal': connectGoogleCalendar(); break;
     case 'sync-gcal': syncAllSessionsToGoogle(); break;
     case 'disconnect-gcal': disconnectGoogleCalendar(); break;
+    case 'disconnect-supabase': disconnectSupabase(); break;
     case 'enable-notify': requestNotificationPermission(); break;
     case 'disable-notify': disableNotifications(); break;
     case 'open-add-session': openModal('Ghi buổi học mới', sessionFormHtml(null), (data)=>{
@@ -3164,6 +3276,15 @@ function handleContentSubmit(e){
     scheduleSave();
     renderView();
     toast(newId ? 'Đã lưu Client ID — bấm "Kết nối bằng tài khoản Google" bên dưới' : 'Đã xoá Client ID');
+  }
+  if(e.target.id==='supabaseConfigForm'){
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const url = (fd.get('supabaseUrl')||'').trim();
+    const anonKey = (fd.get('supabaseAnonKey')||'').trim();
+    if(!url || !anonKey){ toast('Vui lòng nhập đủ Project URL và Anon Key'); return; }
+    toast('Đang kết nối Supabase...');
+    connectSupabase(url, anonKey);
   }
 }
 
