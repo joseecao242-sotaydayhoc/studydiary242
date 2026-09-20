@@ -2616,15 +2616,22 @@ function renderSettings(){
           <li>Vào <b>supabase.com</b> → đăng ký/đăng nhập (miễn phí) → <b>New project</b>. Đặt tên bất kỳ, tạo mật khẩu database, chọn khu vực gần Việt Nam (Singapore), bấm Create — đợi khoảng 1-2 phút để khởi tạo.</li>
           <li>Vào mục <b>SQL Editor</b> (biểu tượng ở sidebar trái) → <b>New query</b> → dán đoạn SQL sau rồi bấm <b>Run</b>:</li>
         </ol>
-        <pre style="background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:11.5px;overflow-x:auto;margin:0 0 10px;">create table app_state (
+        <pre style="background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:11.5px;overflow-x:auto;margin:0 0 10px;">create table if not exists app_state (
   id text primary key,
   data jsonb,
   updated_at timestamptz
 );
 alter table app_state enable row level security;
+
+drop policy if exists "allow anon read" on app_state;
 create policy "allow anon read" on app_state for select using (true);
+
+drop policy if exists "allow anon write" on app_state;
 create policy "allow anon write" on app_state for insert with check (true);
+
+drop policy if exists "allow anon update" on app_state;
 create policy "allow anon update" on app_state for update using (true);</pre>
+        <div style="font-size:11px;color:var(--ink-faint);margin:-4px 0 10px;">Đoạn này an toàn để chạy lại nhiều lần — nếu bảng hoặc quyền đã tồn tại từ trước sẽ tự bỏ qua, không báo lỗi.</div>
         <ol start="3" style="font-size:12.5px;color:var(--ink-soft);padding-left:18px;line-height:1.9;">
           <li>Vào mục <b>Project Settings → API</b>: copy <b>Project URL</b> và khoá <b>anon public</b> (KHÔNG copy khoá "service_role" — khoá đó tuyệt đối không được dán vào đây hay chia sẻ với ai).</li>
           <li>Dán 2 giá trị đó vào 2 ô ở trên rồi bấm <b>"Lưu &amp; đồng bộ"</b>.</li>
