@@ -796,9 +796,14 @@ const sb = SUPABASE_ENABLED ? window.supabase.createClient(SUPABASE_URL, SUPABAS
    mục "Authorized JavaScript origins", rồi dán Client ID vào đây.
    Hướng dẫn chi tiết từng bước nằm trong tab Cài đặt của ứng dụng. */
 const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
-const GOOGLE_CALENDAR_ENABLED = typeof GOOGLE_CLIENT_ID === 'string'
-  && GOOGLE_CLIENT_ID.endsWith('.apps.googleusercontent.com')
-  && !GOOGLE_CLIENT_ID.startsWith('YOUR_'); // tránh nhận nhầm chuỗi placeholder là đã cấu hình thật
+function getGoogleClientId(){
+  const fromSettings = state && state.settings && state.settings.googleClientId ? state.settings.googleClientId.trim() : '';
+  return fromSettings || GOOGLE_CLIENT_ID;
+}
+function isGoogleConfigured(){
+  const id = getGoogleClientId();
+  return typeof id === 'string' && id.endsWith('.apps.googleusercontent.com') && !id.startsWith('YOUR_');
+}
 
 const CLASS_COLORS = ['#5B6FCF','#3F7A5C','#A6791E','#B3402A','#7C5CBF','#2E8B8B','#C0577A'];
 const WEEKDAY_SHORT = ['CN','T2','T3','T4','T5','T6','T7'];
@@ -877,11 +882,11 @@ try{
 function isGoogleCalendarConnected(){ return !!googleAccessToken && googleTokenExpiry > Date.now(); }
 
 function initGoogleTokenClient(){
-  if(!GOOGLE_CALENDAR_ENABLED) return false;
+  if(!isGoogleConfigured()) return false;
   if(typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2){ return false; }
   if(googleTokenClient) return true;
   googleTokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID,
+    client_id: getGoogleClientId(),
     scope: 'https://www.googleapis.com/auth/calendar.events',
     callback: (resp)=>{
       if(resp.error){ toast('Không kết nối được Google Calendar: ' + resp.error); return; }
@@ -896,7 +901,7 @@ function initGoogleTokenClient(){
   return true;
 }
 function connectGoogleCalendar(){
-  if(!GOOGLE_CALENDAR_ENABLED){
+  if(!isGoogleConfigured()){
     toast('Chưa cấu hình Google Client ID — xem hướng dẫn trong tab Cài đặt');
     return;
   }
@@ -1688,7 +1693,7 @@ function renderSchedule(){
       </div>
       <div class="row gap8">
         <button class="btn btn-secondary btn-sm" data-action="export-ics" title="Tải file .ics để nhập thủ công vào Google Calendar/Outlook">Xuất .ics</button>
-        ${GOOGLE_CALENDAR_ENABLED ? (
+        ${isGoogleConfigured() ? (
           isGoogleCalendarConnected()
             ? `<button class="btn btn-secondary" data-action="sync-gcal" title="Đẩy toàn bộ buổi học lên Google Calendar">🔄 Đồng bộ Google Calendar</button>
                <button class="icon-btn" data-action="disconnect-gcal" title="Ngắt kết nối Google Calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg></button>`
@@ -2521,33 +2526,39 @@ function renderSettings(){
 
     <div class="panel panel-pad mb24" style="max-width:560px;margin-top:16px;">
       <div class="panel-title mb16">Đồng bộ Google Calendar</div>
-      ${GOOGLE_CALENDAR_ENABLED ? `
-        <div style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">
-          Trạng thái: ${isGoogleCalendarConnected()
-            ? '<span class="badge badge-good">Đã kết nối</span> — mọi buổi học được thêm/sửa/xoá trong tab Lịch dạy sẽ tự động cập nhật lên Google Calendar của bạn.'
-            : '<span class="badge badge-flat">Chưa kết nối</span> — bấm nút bên dưới để đăng nhập Google và cho phép Study Diary ghi lịch.'}
+      <div style="font-size:13px;color:var(--ink-soft);margin-bottom:12px;">
+        Trạng thái: ${!isGoogleConfigured()
+          ? '<span class="badge badge-flat">Chưa cấu hình</span> — dán Google OAuth Client ID của bạn vào ô bên dưới để bật.'
+          : isGoogleCalendarConnected()
+            ? '<span class="badge badge-good">Đã kết nối</span> — mọi buổi học thêm/sửa/xoá trong tab Lịch dạy sẽ tự động cập nhật lên Google Calendar tài khoản Google của bạn.'
+            : '<span class="badge badge-flat">Chưa kết nối</span> — bấm nút bên dưới để đăng nhập bằng tài khoản Google và cho phép Study Diary ghi lịch.'}
+      </div>
+      <form id="googleClientForm" class="row gap8" style="align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
+        <div class="field" style="margin-bottom:0;flex:1;min-width:220px;">
+          <label>Google OAuth Client ID</label>
+          <input name="googleClientId" value="${escapeHtml(s.googleClientId||'')}" placeholder="xxxx.apps.googleusercontent.com">
         </div>
+        <button type="submit" class="btn btn-secondary">Lưu Client ID</button>
+      </form>
+      ${isGoogleConfigured() ? `
         <div class="row gap8">
           ${isGoogleCalendarConnected()
             ? `<button class="btn btn-secondary" data-action="sync-gcal">🔄 Đồng bộ lại toàn bộ lịch dạy</button>
                <button class="btn btn-danger" data-action="disconnect-gcal">Ngắt kết nối</button>`
-            : `<button class="btn btn-primary" data-action="connect-gcal">🔗 Kết nối Google Calendar</button>`}
+            : `<button class="btn btn-primary" data-action="connect-gcal">🔗 Kết nối bằng tài khoản Google</button>`}
         </div>
-      ` : `
-        <div style="font-size:13px;color:var(--ink-soft);margin-bottom:10px;">
-          Chưa cấu hình. Làm theo các bước dưới đây (chỉ cần làm một lần):
-        </div>
-        <ol style="font-size:12.5px;color:var(--ink-soft);padding-left:18px;line-height:1.9;">
+      ` : ''}
+      <details style="margin-top:14px;">
+        <summary style="cursor:pointer;font-size:12.5px;font-weight:600;color:var(--rule);">Chưa có Client ID? Xem hướng dẫn lấy Client ID (làm một lần)</summary>
+        <ol style="font-size:12.5px;color:var(--ink-soft);padding-left:18px;line-height:1.9;margin-top:10px;">
           <li>Vào <b>console.cloud.google.com</b> → tạo một dự án mới (bất kỳ tên nào).</li>
           <li>Vào <b>APIs &amp; Services → Library</b>, tìm và bật <b>Google Calendar API</b>.</li>
-          <li>Vào <b>APIs &amp; Services → OAuth consent screen</b>: chọn "External", điền tên ứng dụng + email của bạn. Ở mục "Test users", thêm chính email Google bạn dùng để mở Google Calendar.</li>
-          <li>Vào <b>APIs &amp; Services → Credentials → Create Credentials → OAuth client ID</b>, loại <b>Web application</b>.</li>
-          <li>Ở mục <b>Authorized JavaScript origins</b>, thêm đúng địa chỉ web nơi bạn host file này (ví dụ: https://ten-mien-cua-ban.com). Nếu chỉ mở file trên máy (file://) thì Google KHÔNG cho phép — bạn cần host trang này lên một địa chỉ web thật (Netlify, Vercel, GitHub Pages... đều miễn phí).</li>
-          <li>Bấm Create, Google sẽ đưa ra một <b>Client ID</b> dạng <span class="mono">xxxx.apps.googleusercontent.com</span>.</li>
-          <li>Mở file <span class="mono">index.html</span>, tìm dòng <span class="mono">const GOOGLE_CLIENT_ID</span> ở gần đầu file, dán Client ID vào đó rồi lưu và deploy lại.</li>
+          <li>Vào <b>APIs &amp; Services → OAuth consent screen</b> (hoặc "Google Auth Platform"): chọn "External", điền tên ứng dụng + email của bạn. Ở mục "Audience → Test users", thêm chính email Google bạn dùng để mở Google Calendar.</li>
+          <li>Vào mục tạo OAuth client (tên có thể là <b>Credentials</b> hoặc <b>Clients</b>) → <b>Create Credentials/Client → OAuth client ID</b>, loại <b>Web application</b>.</li>
+          <li>Ở mục <b>Authorized JavaScript origins</b>, thêm đúng địa chỉ web nơi bạn host file này (ví dụ: https://ten-mien-cua-ban.com). Nếu chỉ mở file trên máy (file://) thì Google KHÔNG cho phép — cần host trang lên một địa chỉ web thật (Netlify, Vercel, GitHub Pages... đều miễn phí).</li>
+          <li>Bấm Create/Tạo, Google sẽ đưa ra một <b>Client ID</b> dạng <span class="mono">xxxx.apps.googleusercontent.com</span> — copy và dán vào ô "Google OAuth Client ID" ở trên rồi bấm "Lưu Client ID".</li>
         </ol>
-        <div style="font-size:11.5px;color:var(--ink-faint);margin-top:8px;">Sau khi dán Client ID, tải lại trang — nút "Kết nối Google Calendar" sẽ xuất hiện ở đây và trong tab Lịch dạy.</div>
-      `}
+      </details>
     </div>
 
     <div class="panel panel-pad mb24" style="max-width:560px;margin-top:16px;">
@@ -3138,6 +3149,21 @@ function handleContentSubmit(e){
     state.settings.notifyLeadMinutes = mins;
     scheduleSave();
     toast('Đã lưu số phút báo trước');
+  }
+  if(e.target.id==='googleClientForm'){
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const newId = (fd.get('googleClientId')||'').trim();
+    if(newId !== (state.settings.googleClientId||'')){
+      // Client ID đổi -> phải tạo lại token client & yêu cầu kết nối lại
+      googleTokenClient = null;
+      googleAccessToken = null; googleTokenExpiry = 0;
+      try{ localStorage.removeItem(GCAL_TOKEN_KEY); }catch(err){}
+    }
+    state.settings.googleClientId = newId;
+    scheduleSave();
+    renderView();
+    toast(newId ? 'Đã lưu Client ID — bấm "Kết nối bằng tài khoản Google" bên dưới' : 'Đã xoá Client ID');
   }
 }
 
