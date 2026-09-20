@@ -1759,12 +1759,12 @@ function renderSchedule(){
       </div>
       <div class="row gap8">
         <button class="btn btn-secondary btn-sm" data-action="export-ics" title="Tải file .ics để nhập thủ công vào Google Calendar/Outlook">Xuất .ics</button>
-        ${isGoogleConfigured() ? (
-          isGoogleCalendarConnected()
+        ${!isGoogleConfigured()
+          ? `<button class="btn btn-secondary" data-action="connect-gcal" title="Cần cấu hình Client ID trong Cài đặt trước">🔗 Kết nối Google Calendar</button>`
+          : isGoogleCalendarConnected()
             ? `<button class="btn btn-secondary" data-action="sync-gcal" title="Đẩy toàn bộ buổi học lên Google Calendar">🔄 Đồng bộ Google Calendar</button>
                <button class="icon-btn" data-action="disconnect-gcal" title="Ngắt kết nối Google Calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg></button>`
-            : `<button class="btn btn-secondary" data-action="connect-gcal" title="Kết nối và đồng bộ thời gian thực với Google Calendar">🔗 Kết nối Google Calendar</button>`
-        ) : ''}
+            : `<button class="btn btn-secondary" data-action="connect-gcal" title="Kết nối và đồng bộ thời gian thực với Google Calendar">🔗 Kết nối Google Calendar</button>`}
         <button class="btn btn-primary" data-action="open-add-session">+ Ghi buổi học mới</button>
       </div>
     </div>
